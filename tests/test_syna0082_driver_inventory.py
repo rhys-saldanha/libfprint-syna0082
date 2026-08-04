@@ -35,6 +35,14 @@ class DriverInventoryTests(unittest.TestCase):
             "payload_offset": 1, "binary_offset": 6, "length": 12,
         })
 
+    @mock.patch.object(inventory, "imported_symbols", return_value={"CryptGenRandom"})
+    @mock.patch.object(Path, "read_bytes", return_value=b"CalibrationData")
+    def test_inventory_returns_hash_only_result(self, _read, _imports):
+        result = inventory.inventory(Path("driver.dll"))
+        self.assertEqual(result["file"], "driver.dll")
+        self.assertIn("CryptGenRandom", result["capabilities"]["cryptoapi"])
+        self.assertIn("CalibrationData", result["keyword_evidence"])
+
 
 if __name__ == "__main__":
     unittest.main()

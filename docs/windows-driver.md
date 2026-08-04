@@ -44,3 +44,35 @@ The producer has since been narrowed further: captured `0x06` bytes 1 through
 inventory with `--payload` to reproduce the offsets and hashes without dumping
 the proprietary data. Its content semantics remain unresolved, so this finding
 does not yet make the record suitable for inclusion in an open driver.
+
+## Sensor-configuration descriptor catalog
+
+The reference DLL contains a null-terminated catalog at RVA `0x161470`. It has
+75 pointers to fixed-size `0x50`-byte descriptors. Each descriptor has a
+16-byte zero/reserved prefix, 13 selection fields at offsets `0x10` through
+`0x40`, a payload length at `0x44`, and a payload pointer at `0x48`.
+
+The captured 10,500-byte `0x06` body is descriptor index 39. Its selector
+fields are `6, 0x14, 0xffff, 0xffff, 0xe, 5, 4, 0x400080, 0, 3, 0xffff, 1,
+0xffff`; its length is `0x2904`. A distinct 10,500-byte entry at index 66 has
+different sensor-family selectors, so equal length alone is not sufficient to
+select a table.
+
+Static analysis identifies the catalog consumer in the vendor source unit
+named `scsSensorConfig.c`. It walks the pointer array to its null terminator,
+compares descriptor fields with sensor identity/capability fields, then copies
+the selected payload using offsets `0x44` and `0x48`. This establishes a
+static, hardware-variant selection mechanism rather than runtime generation.
+Field semantics and the table's internal instruction format are still being
+decoded.
+
+The older reference driver `5.5.4018.1052` places the same 75-entry catalog at
+RVA `0x161370`, exactly `0x100` earlier. Its index-39 payload has the identical
+SHA-256, `67f4a332d89f76fe12c57fa7f67b43a076f689e78267b888c694e26b05caacc1`.
+Pass `--catalog-rva 0x161370` when inventorying that version; the tool's
+default is deliberately tied to the documented current DLL.
+
+`tools/syna0082_descriptor_catalog.py` reproduces the catalog inventory. Its
+JSON contains only RVAs, lengths, selector values, and SHA-256 hashes. With
+`--payload`, it identifies a capture (including a leading command byte) by
+hash and exact comparison without printing proprietary bytes.

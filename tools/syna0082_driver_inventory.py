@@ -62,6 +62,17 @@ def inventory(path: Path) -> dict[str, object]:
         category: sorted(symbol for symbol in imports if pattern.match(symbol))
         for category, pattern in CATEGORIES.items()
     }
+    evidence = sorted(
+        value for value in strings(data)
+        if KEYWORDS.search(value) and len(value) <= 160
+    )
+    return {
+        "file": path.name,
+        "length": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "capabilities": capabilities,
+        "keyword_evidence": evidence,
+    }
 
 
 def payload_provenance(payload: bytes, binary: bytes) -> dict[str, object]:
@@ -79,17 +90,6 @@ def payload_provenance(payload: bytes, binary: bytes) -> dict[str, object]:
         "length": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),
         "embedded_suffix": embedded,
-    }
-    evidence = sorted(
-        value for value in strings(data)
-        if KEYWORDS.search(value) and len(value) <= 160
-    )
-    return {
-        "file": path.name,
-        "length": len(data),
-        "sha256": hashlib.sha256(data).hexdigest(),
-        "capabilities": capabilities,
-        "keyword_evidence": evidence,
     }
 
 

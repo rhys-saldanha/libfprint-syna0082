@@ -132,6 +132,14 @@ length as `0x2904`. Thus `0x06` is a static vendor table, not per-session
 ciphertext. The table is not copied into this repository; its internal format
 still needs an independent specification or generator.
 
+The adjacent data is a complete 75-entry sensor-configuration catalog, not a
+single ad-hoc descriptor. The Windows driver selects index 39 by comparing 13
+descriptor fields with sensor identity and capability data. The selection
+routine then consumes the explicit `0x2904` length and payload pointer. This
+explains why another same-length table exists but cannot be substituted based
+on size. See `docs/windows-driver.md` and
+`tools/syna0082_descriptor_catalog.py` for the hash-only reproducible map.
+
 An exhaustive byte-sequence map strengthens that result: scan-matrix range
 `[10356, 18869)` is exactly calibration range `[8915, 17428)`. This single
 8,513-byte run accounts for 45.1163% of the complete `0x02` message. The

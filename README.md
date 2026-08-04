@@ -43,6 +43,8 @@ contains partial USB experiments, not a working driver.
 - `protocol/commands.json`: machine-readable command/risk/evidence schema.
 - `tools/syna0082_driver_inventory.py`: hash-only static crypto, registry,
   I/O, firmware, and calibration capability inventory for the vendor DLL.
+- `tools/syna0082_descriptor_catalog.py`: hash-only inventory of the vendor
+  sensor-configuration descriptor catalog; it never prints table bytes.
 - `tools/syna0082_calibration_map.py`: report byte-range provenance from
   decrypted calibration to scan matrix without dumping either artifact.
 - `tools/syna0082-image-summary.py`: validate raw image records and optionally
