@@ -121,7 +121,7 @@ Do not copy the PCAP into the source repository or attach it to a public issue.
 Clone this repository and install build dependencies:
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/libfprint-syna0082.git
+git clone https://github.com/oae/libfprint-syna0082.git
 cd libfprint-syna0082
 sudo tools/setup-arch-root
 ```
