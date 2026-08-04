@@ -145,6 +145,19 @@ enrollment, and 0x13 during verification. All other 18,868 bytes are
 identical. This identifies the record as a device-specific scan matrix with a
 single operation-mode field, rather than an encrypted or per-scan payload.
 
+## `0x06` omission experiment
+
+A usbmon-recorded Linux trial sent the known initialization sequence and the
+independently generated `0x39`, deliberately omitted only `0x06`, and then sent
+the unchanged `0x02` matrix. Commands through `0x39` returned their normal
+responses. Instead of the normal 2,154-byte `0x02` response, the reader
+returned the two-byte status `44 04` and did not enter acquisition.
+
+This proves that `0x06` establishes a prerequisite for processing `0x02`; it
+is not an unused Windows-driver artifact. The trial did not send reset,
+firmware, ownership, database, or template commands. Raw capture and probe log
+remain outside Git as `omit-config06-01`.
+
 ## Verification outcomes
 
 The successful lock-screen capture has one acquisition followed by short

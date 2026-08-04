@@ -86,6 +86,11 @@ requires the general state-change acknowledgement. Do not run it unattended:
 record usbmon, use a fresh output path, and power-cycle the reader after the
 trial whether it succeeds or times out.
 
+The first omission trial completed through generated `0x39`, then received
+status `44 04` from `0x02` rather than its 2,154-byte response. Therefore the
+driver must retain `0x06` until that static record has an independent open
+representation.
+
 On Saber, `tools/run-saber-captured-scan scan-linux-NN` records usbmon3 and the
 probe log alongside the PGM while refusing to overwrite any existing output.
 
