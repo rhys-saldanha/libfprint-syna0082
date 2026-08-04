@@ -111,6 +111,14 @@ and a block-protected body at `[260, length)`. All 75 post-prefix body lengths
 remain divisible by 16. The selected PQI payload has a 10,240-byte post-prefix
 body. The fixed prefix has RSA-2048 size, but its semantics remain unresolved.
 
+Cross-descriptor device trials refine its role. A same-length donor from the
+same PQI selector family is rejected with `be 04` even when its original prefix
+and body are sent together. Transplanting only that donor prefix also gives
+`be 04`, while retaining descriptor 39's prefix and transplanting the donor
+body reaches `4f 04`. The prefix is therefore validated against the physical
+sensor/configuration selection before the body is validated. It is not simply
+a free-standing signature over any catalog body.
+
 ## Sensor-security public keys
 
 The `scsSSPubKey.c` lookup is separate from the sensor-config catalog. It has

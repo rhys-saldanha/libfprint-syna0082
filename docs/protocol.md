@@ -236,6 +236,40 @@ SHA-256 values are, respectively,
 `f1ff047a089ff1b0bc00695c3e6566cf6ae2f4d114d37d287c22bf0e00f0eb77`,
 and `83946fa97e0e0be3e595e2db0b46ac20e68a3804fc9db63ce07fdebe092b6403`.
 
+## `0x06` cross-descriptor transplants
+
+Catalog descriptor 66 was chosen as a donor because it has the same 10,500-byte
+payload length and the same `0x06, 0x14` PQI selector family as descriptor 39.
+Its selector fields 5 and 10 differ (`0x0d` versus `0x0e`, and `2` versus `3`),
+and 255 of its 256 protected-prefix bytes differ. The complete donor message
+has SHA-256
+`19765f65cbe44e0f057e6064e72f56ac134fff8eee553d8b3348ae38d865ff6f`.
+It remains outside Git.
+
+Three guarded trials produced the following results:
+
+| Prefix | Body | `0x06` response |
+| --- | --- | --- |
+| descriptor 66 | descriptor 39 | `be 04` |
+| descriptor 66 | descriptor 66 | `be 04` |
+| descriptor 39 | descriptor 66 | `4f 04` |
+
+The complete, internally paired descriptor 66 still fails at the prefix stage.
+Therefore `be 04` is not merely a signature-versus-body mismatch: the prefix
+is bound to, or declares, a sensor/configuration variant that this physical
+reader rejects. Conversely, retaining the accepted descriptor-39 prefix lets
+processing reach the body-specific `4f 04` class even when the entire body is
+replaced. This establishes ordered, separate validation of the selected
+variant prefix and protected body. It does not distinguish an RSA signature,
+certificate-like authorization record, encrypted key envelope, or another
+RSA-sized object.
+
+The external pcaps are `transplant-config06-prefix-01`,
+`alternate-config06-full-01`, and `transplant-config06-body-01`, with SHA-256
+values `b1187f0f50813f86727cb7030232891410b204413ecf33c139a3e818d1768913`,
+`ab9e37e8e58f4adc4ea0b8dfc3ef7755c41c254b4b693266eb65f80813a14113`,
+and `9135ec2baaf883509a4cc5dbcd99038817be6b4811b650bc4bd3465262cb8abb`.
+
 ## Verification outcomes
 
 The successful lock-screen capture has one acquisition followed by short

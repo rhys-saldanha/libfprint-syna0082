@@ -38,6 +38,9 @@ typedef struct
   bool flip_config_06_envelope_middle_bit;
   bool flip_config_06_envelope_last_bit;
   bool flip_config_06_body_bit;
+  bool transplant_config_06_prefix;
+  bool transplant_config_06_body;
+  bool use_alternate_config_06;
 } Options;
 
 typedef struct
@@ -82,6 +85,15 @@ parse_options (int argc, char **argv, Options *options)
       else if (strcmp (argv[i],
                        "--experimental-flip-config-06-body-bit") == 0)
         options->flip_config_06_body_bit = true;
+      else if (strcmp (argv[i],
+                       "--experimental-transplant-config-06-prefix") == 0)
+        options->transplant_config_06_prefix = true;
+      else if (strcmp (argv[i],
+                       "--experimental-transplant-config-06-body") == 0)
+        options->transplant_config_06_body = true;
+      else if (strcmp (argv[i],
+                       "--experimental-use-alternate-config-06") == 0)
+        options->use_alternate_config_06 = true;
       else
         return false;
     }
@@ -92,7 +104,10 @@ parse_options (int argc, char **argv, Options *options)
                              options->flip_config_06_envelope_bit +
                              options->flip_config_06_envelope_middle_bit +
                              options->flip_config_06_envelope_last_bit +
-                             options->flip_config_06_body_bit;
+                             options->flip_config_06_body_bit +
+                             options->transplant_config_06_prefix +
+                             options->transplant_config_06_body +
+                             options->use_alternate_config_06;
   return acknowledged && options->blob_dir != NULL && options->output != NULL &&
          experiments <= 1;
 }
@@ -452,6 +467,7 @@ main (int argc, char **argv)
   Options options;
   uint8_t config_39[SYNA0082_SCAN_CONFIG_SIZE];
   uint8_t config_06[SYNA0082_CONFIG_06_LENGTH];
+  uint8_t alternate_config_06[SYNA0082_CONFIG_06_LENGTH];
   uint8_t scan_02[SYNA0082_SCAN_02_LENGTH];
   uint8_t response[SYNA0082_IMAGE_RESPONSE_LENGTH];
   libusb_context *context = NULL;
@@ -472,6 +488,9 @@ main (int argc, char **argv)
                "[--experimental-flip-config-06-envelope-middle-bit] "
                "[--experimental-flip-config-06-envelope-last-bit] "
                "[--experimental-flip-config-06-body-bit] "
+               "[--experimental-transplant-config-06-prefix] "
+               "[--experimental-transplant-config-06-body] "
+               "[--experimental-use-alternate-config-06] "
                "--i-understand-device-state-will-change\n",
                argv[0]);
       return 2;
@@ -482,6 +501,14 @@ main (int argc, char **argv)
                    "config-06.bin",
                    config_06,
                    sizeof (config_06),
+                   0x06)) ||
+      ((options.transplant_config_06_prefix ||
+        options.transplant_config_06_body ||
+        options.use_alternate_config_06) &&
+       !load_blob (options.blob_dir,
+                   "config-06-alternate.bin",
+                   alternate_config_06,
+                   sizeof (alternate_config_06),
                    0x06)) ||
       !load_blob (options.blob_dir,
                   "scan-matrix-02.bin",
@@ -525,6 +552,36 @@ main (int argc, char **argv)
       config_06[261] ^= 0x01;
       fputs ("experiment=flip-config-06-body-bit message-offset=261 "
              "payload-offset=260 mask=01\n", stderr);
+    }
+  else if (options.transplant_config_06_prefix)
+    {
+      if (memcmp (config_06, alternate_config_06, 5) != 0)
+        {
+          fputs ("alternate config command/header mismatch\n", stderr);
+          return 1;
+        }
+      memcpy (config_06 + 5, alternate_config_06 + 5, 256);
+      fputs ("experiment=transplant-config-06-prefix "
+             "message-range=[5,261) payload-range=[4,260)\n", stderr);
+    }
+  else if (options.transplant_config_06_body)
+    {
+      if (memcmp (config_06, alternate_config_06, 5) != 0)
+        {
+          fputs ("alternate config command/header mismatch\n", stderr);
+          return 1;
+        }
+      memcpy (config_06 + 261,
+              alternate_config_06 + 261,
+              sizeof (config_06) - 261);
+      fputs ("experiment=transplant-config-06-body "
+             "message-range=[261,10501) payload-range=[260,10500)\n",
+             stderr);
+    }
+  else if (options.use_alternate_config_06)
+    {
+      memcpy (config_06, alternate_config_06, sizeof (config_06));
+      fputs ("experiment=use-alternate-config-06 descriptor=66\n", stderr);
     }
 
   result = libusb_init (&context);

@@ -1,15 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 || ! $1 =~ ^(header|envelope|envelope-middle|envelope-last|body)$ || ! $2 =~ ^[0-9][0-9]$ ]]; then
-  echo "usage: $0 {header|envelope|envelope-middle|envelope-last|body} NN" >&2
+if [[ $# -ne 2 || ! $1 =~ ^(header|envelope|envelope-middle|envelope-last|body|prefix-transplant|body-transplant|alternate-full)$ || ! $2 =~ ^[0-9][0-9]$ ]]; then
+  echo "usage: $0 {header|envelope|envelope-middle|envelope-last|body|prefix-transplant|body-transplant|alternate-full} NN" >&2
   exit 2
 fi
 
 region=$1
 sequence=$2
 lab=/home/alperen/fingerprint-lab
-stem=$lab/flip-config06-$region-$sequence
+if [[ $region == prefix-transplant ]]; then
+  stem=$lab/transplant-config06-prefix-$sequence
+  experiment_arg=--experimental-transplant-config-06-prefix
+elif [[ $region == body-transplant ]]; then
+  stem=$lab/transplant-config06-body-$sequence
+  experiment_arg=--experimental-transplant-config-06-body
+elif [[ $region == alternate-full ]]; then
+  stem=$lab/alternate-config06-full-$sequence
+  experiment_arg=--experimental-use-alternate-config-06
+else
+  stem=$lab/flip-config06-$region-$sequence
+  experiment_arg=--experimental-flip-config-06-$region-bit
+fi
 probe=/tmp/syna0082-c-test/syna0082-scan
 blobs=$lab/device-data-06cb0082
 
@@ -35,7 +47,7 @@ set +e
 timeout 45 "$probe" \
   --blob-dir "$blobs" \
   --output "$stem.pgm" \
-  "--experimental-flip-config-06-$region-bit" \
+  "$experiment_arg" \
   --i-understand-device-state-will-change \
   2>&1 | tee "$stem.probe.log"
 probe_status=${PIPESTATUS[0]}

@@ -112,6 +112,16 @@ The boundary probe adds three mutually exclusive flags:
 overwrite prior evidence. All experimental mutation flags and omission are
 mutually exclusive. Power-cycle the reader between trials.
 
+For cross-descriptor trials, place the same-length donor outside Git as
+`config-06-alternate.bin` in the probe blob directory. The
+`--experimental-transplant-config-06-prefix`,
+`--experimental-transplant-config-06-body`, and
+`--experimental-use-alternate-config-06` flags copy only the explicitly named
+region. The boundary-test runner exposes these as `prefix-transplant`,
+`body-transplant`, and `alternate-full`. The probe checks command, header, and
+exact length before a partial transplant; experiment flags remain mutually
+exclusive.
+
 After a physical power cycle, the paired control run restored `0x06` while
 keeping the generated `0x39`. It received the normal 2,154-byte `0x02`
 response, observed the capture-ready event, and acquired a valid 56x144 frame.
