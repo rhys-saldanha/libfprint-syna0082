@@ -29,6 +29,24 @@ They are followed by a 125-byte message beginning `39 20 bf 02`, a
 beginning `02 98 00 00`. The large records may contain initialization,
 cryptographic, or opaque vendor data; their meaning is not yet established.
 
+The `cold-plug-01` capture starts before USB enumeration and records the device
+being assigned address 7. After standard descriptor and configuration control
+transfers, the Windows driver immediately sends these endpoint `0x01` payloads:
+
+```text
+01
+19
+08 60 20 00 80 0b 00 00 00 04
+07 80 20 00 80 04
+75
+```
+
+The device answers each command on endpoint `0x81`. This 54-packet trace lasts
+107 ms and establishes that `01`, `19`, and `75` belong to cold initialization,
+not only to an enrollment or verification operation. The earlier leading `1a`
+was not present in this cold-plug trace, so its role remains operation-specific
+or dependent on prior device state.
+
 ## Acquisition cycle
 
 A finger acquisition begins with the five-byte host message:

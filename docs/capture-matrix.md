@@ -38,3 +38,14 @@ python .\tools\usbpcap-summary.py `
   --device-address 7 `
   --output C:\fingerprint-lab\raw\cold-plug-01.usb.jsonl
 ```
+
+## Completed captures
+
+`cold-plug-01` was captured on 2026-08-04 from `USBPcap5`, with the newly
+inserted reader assigned USB address 7. It contains 54 packets over 107 ms and
+includes enumeration plus the first Windows-driver initialization commands.
+Its PCAP SHA-256 is
+`d42dccd0b42b27a0db83d2113914baf08ea01d05340355a07dad73e4e5cebe18`.
+
+The PCAP, metadata JSON, and 54-line normalized JSONL remain outside Git under
+`C:\fingerprint-lab\raw` and `/home/alperen/fingerprint-lab/raw`.

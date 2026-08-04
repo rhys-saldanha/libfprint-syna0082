@@ -18,5 +18,6 @@ Baseline result on 2026-08-04:
 - 0 failed;
 - 2 virtual-device tests skipped with status 77.
 
-The Windows enrollment, match, and miss-then-match captures normalize to 336,
-100, and 148 USB records respectively using `tools/usbpcap-summary.py`.
+The Windows cold-plug, enrollment, match, and miss-then-match captures normalize
+to 54, 336, 100, and 148 USB records respectively using
+`tools/usbpcap-summary.py`.
