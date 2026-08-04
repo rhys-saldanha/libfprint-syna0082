@@ -102,8 +102,20 @@ unprotect and passes a scope/flags value separately. Attempts to decrypt the
 blob in the interactive Windows user's CurrentUser and LocalMachine contexts
 both fail, which is consistent with it being protected in the WUDF service
 account's DPAPI context. Accessing that context requires a separately approved
-elevated diagnostic; it is not required for capture parsing and has not been
-performed.
+elevated diagnostic; it is not required for capture parsing.
+
+An approved one-shot diagnostic running as SYSTEM successfully decrypted the
+value in memory. The plaintext is 26,244 bytes with a SHA-256 of
+15198b4707710388def9bdc7449dac558012776fc77681b4ee1397fba3dc236b
+and Shannon entropy of approximately 4.88 bits per byte. It was never written
+to disk.
+
+The diagnostic sampled non-overlapping 64-byte chunks every 256 bytes from
+each large host-to-device capture payload. For all three observed 18,869-byte
+0x02 variants, 33 of 74 sampled chunks occur verbatim in the calibration
+plaintext. No sampled chunk from the 10,501-byte 0x06 payload occurs there.
+This establishes that 0x02 is substantially assembled from calibration data,
+while 0x06 has a different source.
 
 ## Verification outcomes
 

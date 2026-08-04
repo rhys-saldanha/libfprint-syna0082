@@ -33,6 +33,10 @@ contains partial USB experiments, not a working driver.
 - `tools/inventory-linux`: read-only Linux USB/fprint inventory.
 - `tools/setup-saber-root`: reproducible Arch build/capture dependencies.
 - `tools/capture-windows.ps1`: bounded, single-device USBPcap capture helper.
+- `tools/inspect-windows-calibration.ps1`: elevated, hash-only DPAPI
+  inspection that never persists decrypted calibration data.
+- `tools/run-windows-calibration-inspection.ps1`: one-shot scheduled-task
+  launcher with collision checks and automatic cleanup.
 - `tools/usbpcap-summary.py`: normalize one USB device's capture to JSON Lines.
 - `tools/syna0082-image-summary.py`: validate raw image records and optionally
   extract them outside any Git worktree.
