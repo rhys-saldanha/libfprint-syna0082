@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source_rule=/home/alperen/fingerprint-lab/research-src/udev/60-libfprint-06cb0082.rules
+target_rule=/etc/udev/rules.d/60-libfprint-06cb0082.rules
+usbmon_source=/home/alperen/fingerprint-lab/research-src/udev/60-usbmon-wireshark.rules
+usbmon_target=/etc/udev/rules.d/60-usbmon-wireshark.rules
+
+if [[ ${EUID} -ne 0 ]]; then
+  echo "Run this helper through sudo." >&2
+  exit 1
+fi
+
+/usr/bin/install -D -m 0644 "$source_rule" "$target_rule"
+/usr/bin/install -D -m 0644 "$usbmon_source" "$usbmon_target"
+/usr/bin/udevadm control --reload-rules
+/usr/bin/udevadm trigger \
+  --action=change \
+  --subsystem-match=usb \
+  --attr-match=idVendor=06cb \
+  --attr-match=idProduct=0082
+/usr/bin/udevadm settle
+
+/usr/bin/udevadm trigger --action=change --subsystem-match=usbmon
+/usr/bin/udevadm settle
+
+echo "Installed $target_rule"
+echo "Installed $usbmon_target"

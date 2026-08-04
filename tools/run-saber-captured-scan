@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 || ! $1 =~ ^scan-linux-[0-9][0-9]$ ]]; then
+  echo "usage: $0 scan-linux-NN" >&2
+  exit 2
+fi
+
+lab=/home/alperen/fingerprint-lab
+stem=$1
+capture="$lab/$stem.pcapng"
+capture_log="$lab/$stem-dumpcap.log"
+probe_log="$lab/$stem.log"
+image="$lab/$stem.pgm"
+probe="$lab/research-src/build/syna0082-scan"
+blobs="$lab/device-data-06cb0082"
+
+for path in "$capture" "$capture_log" "$probe_log" "$image"; do
+  if [[ -e $path ]]; then
+    echo "Refusing to overwrite $path" >&2
+    exit 2
+  fi
+done
+
+sg wireshark -c \
+  "/usr/bin/dumpcap -q -i usbmon3 -a duration:120 -w '$capture'" \
+  >"$capture_log" 2>&1 &
+capture_pid=$!
+
+stop_capture() {
+  kill -INT "$capture_pid" 2>/dev/null || true
+  wait "$capture_pid" 2>/dev/null || true
+}
+trap stop_capture EXIT
+
+sleep 1
+set +e
+"$probe" \
+  --blob-dir "$blobs" \
+  --output "$image" \
+  --i-understand-device-state-will-change \
+  2>&1 | tee "$probe_log"
+probe_status=${PIPESTATUS[0]}
+set -e
+
+stop_capture
+trap - EXIT
+exit "$probe_status"

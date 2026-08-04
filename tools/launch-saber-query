@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+display=$(
+  systemctl --user show-environment |
+    sed -n 's/^DISPLAY=//p'
+)
+wayland_display=$(
+  systemctl --user show-environment |
+    sed -n 's/^WAYLAND_DISPLAY=//p'
+)
+
+if [[ -z "$display" || -z "$wayland_display" ]]; then
+  echo "Could not discover the graphical session environment" >&2
+  exit 2
+fi
+
+exec env \
+  DISPLAY="$display" \
+  WAYLAND_DISPLAY="$wayland_display" \
+  XDG_RUNTIME_DIR="/run/user/$(id -u)" \
+  /usr/bin/alacritty --hold -e \
+  /home/alperen/fingerprint-lab/research-src/build/syna0082-query \
+  --i-understand-read-only-usb-query

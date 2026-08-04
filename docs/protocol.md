@@ -24,6 +24,12 @@ Enrollment and verification begin with the same one-byte commands on endpoint
 75
 ```
 
+Immediately before `0x1a`, Windows sends a device-to-host vendor control
+transfer with `bmRequestType=0xc0`, `bRequest=0x14`, `wValue=0`, `wIndex=0`,
+and `wLength=2`. The reader returns `00 00`. This operation-control step is
+required when reproducing the session start; bulk initialization alone is not
+equivalent.
+
 They are followed by a 125-byte message beginning `39 20 bf 02`, a
 10,501-byte message beginning `06 02 00 00`, and an 18,869-byte message
 beginning `02 98 00 00`. The large records may contain initialization,
@@ -150,5 +156,31 @@ comparing repeated match and miss captures before assigning semantics.
 - `0x39` is an envelope or operation-status structure.
 - `0x06` and `0x02` carry session/configuration or cryptographic records.
 
-These are hypotheses, not command definitions. No message is approved for
-Linux replay until its state effects have been determined.
+These remain hypotheses, not stable command definitions. Replays should retain
+strict length checks and save the resulting device state for comparison.
+
+The five-byte capture-ready events observed so far are `03 42 04 00 40` and
+`03 43 04 00 41`. Byte offset 2 (not offset 3) contains the shared `0x04`
+capture-ready value; Windows sends `51 00 20 00 00` immediately afterward.
+
+## Linux query validation
+
+The guarded Linux probe successfully queried the reader on 2026-08-04 without
+resetting or reconfiguring it. Command `0x01` returned 38 bytes beginning with
+`00 00 10 b6 04`, matching the Windows capture. Command `0x19` returned the
+expected 68-byte frame but began with `00 00 02 00 21`; the Windows capture's
+`00 00 00 03 01` must therefore be treated as device state, not a fixed magic
+prefix.
+
+## Linux acquisition validation
+
+The standalone Linux probe completed a single acquisition on 2026-08-04. It
+sent the captured operation-control and bulk initialization sequence, observed
+`03 42 04 00 40`, queued an 8,082-byte bulk-IN transfer, and sent
+`51 00 20 00 00`. The response parsed as an 18-byte header plus a 56x144
+grayscale frame with metadata `4d 01 08 00 00 00 00 00`.
+
+The resulting PGM and simultaneous usbmon capture remain outside Git. The PGM
+SHA-256 is `570d45ad8857eb868148d3bf5ef96b8a295c53d59d4a69c313a322bdca034cb6`.
+Its uncalibrated appearance is consistent with raw frames extracted from the
+Windows enrollment capture; it is not evidence of a failed USB transfer.

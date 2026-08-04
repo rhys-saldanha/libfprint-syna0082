@@ -46,3 +46,29 @@ driver or device-ID implementation is required.
 The standalone C protocol parser validates the 18-byte image header, declared
 record length, dimensions, metadata, and pixel span without accessing USB.
 Its synthetic Meson test passes on Saber with warnings treated as errors.
+
+## Development USB access
+
+`udev/60-libfprint-06cb0082.rules` applies `uaccess` only to `06cb:0082`, so
+the active local session can run libusb probes without root. The usbmon rule
+sets monitor nodes to group `wireshark` and mode `0660`. Install both using
+`tools/install-saber-udev`, add the developer to `wireshark`, and load the
+kernel monitor when packet capture is needed:
+
+```bash
+sudo tools/install-saber-udev
+sudo usermod -aG wireshark alperen
+sudo modprobe usbmon
+```
+
+The single-frame probe consumes device-specific blobs kept outside Git:
+
+```bash
+build/syna0082-scan \
+  --blob-dir ~/fingerprint-lab/device-data-06cb0082 \
+  --output ~/fingerprint-lab/scan.pgm \
+  --i-understand-device-state-will-change
+```
+
+On Saber, `tools/run-saber-captured-scan scan-linux-NN` records usbmon3 and the
+probe log alongside the PGM while refusing to overwrite any existing output.

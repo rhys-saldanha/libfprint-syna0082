@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+probe=/home/alperen/fingerprint-lab/research-src/build/syna0082-query
+log=/home/alperen/fingerprint-lab/syna0082-query-01.log
+
+if [[ -e "$log" ]]; then
+  echo "Refusing to overwrite $log" >&2
+  exit 2
+fi
+
+set +e
+"$probe" --i-understand-read-only-usb-query 2>&1 | tee "$log"
+status=$?
+set -e
+exit "$status"

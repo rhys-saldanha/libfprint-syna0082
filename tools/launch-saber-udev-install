@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+display=$(systemctl --user show-environment | sed -n 's/^DISPLAY=//p')
+wayland_display=$(
+  systemctl --user show-environment | sed -n 's/^WAYLAND_DISPLAY=//p'
+)
+
+exec env \
+  DISPLAY="$display" \
+  WAYLAND_DISPLAY="$wayland_display" \
+  XDG_RUNTIME_DIR="/run/user/$(id -u)" \
+  /usr/bin/alacritty --hold -e \
+  /usr/bin/sudo \
+  /home/alperen/fingerprint-lab/research-src/tools/install-saber-udev

@@ -44,6 +44,14 @@ contains partial USB experiments, not a working driver.
   blobs outside Git without replaying them.
 - `probe/syna0082-info.c`: descriptor-only Linux inventory; it never opens the
   device or sends transfers.
+- `probe/syna0082-query.c`: guarded 0x01/0x19 information-query probe; build
+  it for review, but do not execute it without explicit approval.
+- `probe/syna0082-scan.c`: guarded single-frame acquisition probe using the
+  device-specific blobs extracted outside Git.
+- `udev/60-libfprint-06cb0082.rules`: grants the active local session access
+  to the development reader without running probes as root.
+- `udev/60-usbmon-wireshark.rules`: permits reproducible Linux USB captures
+  for members of the `wireshark` group.
 - `docs/capture-matrix.md`: repeatable Windows traffic-capture procedure.
 - `patches/`: eventual patches against a pinned upstream libfprint commit.
 

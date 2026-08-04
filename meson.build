@@ -19,6 +19,21 @@ executable(
   install: false,
 )
 
+executable(
+  'syna0082-query',
+  'probe/syna0082-query.c',
+  dependencies: libusb,
+  install: false,
+)
+
+executable(
+  'syna0082-scan',
+  'probe/syna0082-scan.c',
+  dependencies: libusb,
+  link_with: syna0082_protocol,
+  install: false,
+)
+
 test(
   'syna0082-protocol',
   executable(
