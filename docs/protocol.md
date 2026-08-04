@@ -89,6 +89,22 @@ modified TLS transport used by the older Validity90 prototype. The
 while the 18,869-byte 0x02 payload has operation-dependent variants. Their
 roles remain unknown.
 
+## Windows calibration source
+
+The Windows device instance stores a 26,470-byte DPAPI-protected
+CalibrationData value below its Device Parameters/Device Data registry key.
+No calibration bytes or registry exports are committed.
+
+Static disassembly of driver version 5.5.4021.1052 shows that its
+CryptUnprotectData wrapper passes NULL for optional entropy, reserved data,
+prompt data, and description output. The wrapper selects either protect or
+unprotect and passes a scope/flags value separately. Attempts to decrypt the
+blob in the interactive Windows user's CurrentUser and LocalMachine contexts
+both fail, which is consistent with it being protected in the WUDF service
+account's DPAPI context. Accessing that context requires a separately approved
+elevated diagnostic; it is not required for capture parsing and has not been
+performed.
+
 ## Verification outcomes
 
 The successful lock-screen capture has one acquisition followed by short
