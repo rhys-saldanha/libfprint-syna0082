@@ -18,6 +18,11 @@ Baseline result on 2026-08-04:
 - 0 failed;
 - 2 virtual-device tests skipped with status 77.
 
+After adding the experimental `syna0082` driver and independent OpenCV matcher,
+the current upstream tree passes 130/130 tests. OpenCV is linked as the minimal
+core, image-processing, feature, geometry/calibration, and FLANN module set so
+optional VTK/HDF modules do not leak into libfprint's introspection link.
+
 The Windows cold-plug, enrollment, match, and miss-then-match captures normalize
 to 54, 336, 100, and 148 USB records respectively using
 `tools/usbpcap-summary.py`.
@@ -72,3 +77,16 @@ build/syna0082-scan \
 
 On Saber, `tools/run-saber-captured-scan scan-linux-NN` records usbmon3 and the
 probe log alongside the PGM while refusing to overwrite any existing output.
+
+## fprintd integration
+
+The development examples honor `LIBFPRINT_SYNA0082_BLOB_DIR`. The system
+fprintd unit uses `ProtectHome=true`, so the driver defaults to
+`/var/lib/libfprint/syna0082`. `tools/install-saber-fprintd-root` copies only
+`config-39.bin`, `config-06.bin`, and `scan-matrix-02.bin` there as root-owned
+mode-0600 files, installs the locally built package, and restarts fprintd if it
+is already running.
+
+The operation replaces the installed `libfprint-git` package. Saber keeps its
+previous package in `/var/cache/pacman/pkg`, so rollback is available with
+`pacman -U` using that cached package. Do not place the device blobs in Git.

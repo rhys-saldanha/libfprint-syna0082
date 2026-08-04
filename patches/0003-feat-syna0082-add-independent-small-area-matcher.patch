@@ -1,0 +1,1041 @@
+From 92f1a5220076a29fff4ad8c62292180a6000805f Mon Sep 17 00:00:00 2001
+From: Alperen Elhan <alperen@elhan.org>
+Date: Tue, 4 Aug 2026 20:14:27 +0300
+Subject: [PATCH] feat(syna0082): add independent small-area matcher
+
+---
+ libfprint/drivers/syna0082-matcher.cpp | 303 +++++++++++++++++++++++++
+ libfprint/drivers/syna0082-matcher.h   |  36 +++
+ libfprint/drivers/syna0082.c           | 199 +++++++++++++++-
+ libfprint/fp-image-device.c            |  14 +-
+ libfprint/fpi-image-device.c           | 162 ++++++++-----
+ libfprint/fpi-image-device.h           |  15 ++
+ libfprint/meson.build                  |   6 +-
+ meson.build                            |  43 +++-
+ 8 files changed, 712 insertions(+), 66 deletions(-)
+ create mode 100644 libfprint/drivers/syna0082-matcher.cpp
+ create mode 100644 libfprint/drivers/syna0082-matcher.h
+
+diff --git a/libfprint/drivers/syna0082-matcher.cpp b/libfprint/drivers/syna0082-matcher.cpp
+new file mode 100644
+index 0000000..0c497f9
+--- /dev/null
++++ b/libfprint/drivers/syna0082-matcher.cpp
+@@ -0,0 +1,303 @@
++/*
++ * Independent small-area matcher for Synaptics/PQI 06cb:0082.
++ *
++ * Copyright (C) 2026
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#include "syna0082-matcher.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstring>
++#include <vector>
++
++#include <opencv2/calib3d.hpp>
++#include <opencv2/core.hpp>
++#include <opencv2/features2d.hpp>
++#include <opencv2/imgproc.hpp>
++
++namespace
++{
++constexpr guint native_width = 56;
++constexpr guint native_height = 144;
++constexpr guint upscale = 4;
++constexpr guint descriptor_columns = 128;
++constexpr guint maximum_features = 700;
++constexpr guint minimum_features = 8;
++constexpr double ratio_threshold = 0.72;
++constexpr double ransac_threshold = 8.0;
++constexpr guint minimum_inliers = 6;
++constexpr double minimum_inlier_ratio = 0.65;
++constexpr double minimum_coverage = 0.015;
++constexpr char feature_magic[] = "SY82FT01";
++constexpr gsize feature_header_size = 12;
++
++struct FeatureSet
++{
++  std::vector<cv::Point2f> points;
++  cv::Mat descriptors;
++};
++
++static void
++append_u32 (std::vector<guint8> &output,
++            guint32              value)
++{
++  const guint32 encoded = GUINT32_TO_LE (value);
++  const auto *bytes = reinterpret_cast<const guint8 *> (&encoded);
++  output.insert (output.end (), bytes, bytes + sizeof (encoded));
++}
++
++static void
++append_float (std::vector<guint8> &output,
++              float                value)
++{
++  guint32 bits;
++
++  static_assert (sizeof (bits) == sizeof (value));
++  std::memcpy (&bits, &value, sizeof (bits));
++  append_u32 (output, bits);
++}
++
++static gboolean
++read_u32 (const guint8 *data,
++          gsize         length,
++          gsize        *offset,
++          guint32      *value)
++{
++  guint32 encoded;
++
++  if (*offset > length || length - *offset < sizeof (encoded))
++    return FALSE;
++  std::memcpy (&encoded, data + *offset, sizeof (encoded));
++  *offset += sizeof (encoded);
++  *value = GUINT32_FROM_LE (encoded);
++  return TRUE;
++}
++
++static gboolean
++read_float (const guint8 *data,
++            gsize         length,
++            gsize        *offset,
++            float        *value)
++{
++  guint32 bits;
++
++  if (!read_u32 (data, length, offset, &bits))
++    return FALSE;
++  std::memcpy (value, &bits, sizeof (bits));
++  return TRUE;
++}
++
++static gboolean
++decode_features (const guint8 *data,
++                 gsize         length,
++                 FeatureSet   *features,
++                 GError      **error)
++{
++  gsize offset = 0;
++  guint32 count;
++  const gsize row_size = (2 + descriptor_columns) * sizeof (guint32);
++
++  if (length < feature_header_size ||
++      std::memcmp (data, feature_magic, sizeof (feature_magic) - 1) != 0)
++    goto invalid;
++  offset = sizeof (feature_magic) - 1;
++  if (!read_u32 (data, length, &offset, &count) ||
++      count < minimum_features || count > maximum_features ||
++      length - offset != static_cast<gsize> (count) * row_size)
++    goto invalid;
++
++  features->points.reserve (count);
++  features->descriptors = cv::Mat (count, descriptor_columns, CV_32F);
++  for (guint row = 0; row < count; row++)
++    {
++      float x;
++      float y;
++
++      if (!read_float (data, length, &offset, &x) ||
++          !read_float (data, length, &offset, &y) ||
++          !std::isfinite (x) || !std::isfinite (y))
++        goto invalid;
++      features->points.emplace_back (x, y);
++      for (guint column = 0; column < descriptor_columns; column++)
++        {
++          float value;
++
++          if (!read_float (data, length, &offset, &value) ||
++              !std::isfinite (value))
++            goto invalid;
++          features->descriptors.at<float> (row, column) = value;
++        }
++    }
++  return TRUE;
++
++invalid:
++  g_set_error_literal (error,
++                       G_IO_ERROR,
++                       G_IO_ERROR_INVALID_DATA,
++                       "Invalid 06cb:0082 feature template");
++  return FALSE;
++}
++}
++
++GBytes *
++syna0082_matcher_extract (const guint8 *pixels,
++                          guint         width,
++                          guint         height,
++                          GError      **error)
++{
++  cv::Mat native;
++  cv::Mat enlarged;
++  cv::Mat normalized;
++  std::vector<cv::KeyPoint> keypoints;
++  cv::Mat descriptors;
++  std::vector<guint8> encoded;
++
++  if (pixels == nullptr || width != native_width || height != native_height)
++    {
++      g_set_error_literal (error,
++                           G_IO_ERROR,
++                           G_IO_ERROR_INVALID_ARGUMENT,
++                           "Matcher requires a 56x144 grayscale raster");
++      return nullptr;
++    }
++
++  native = cv::Mat (height,
++                    width,
++                    CV_8UC1,
++                    const_cast<guint8 *> (pixels));
++  cv::resize (native,
++              enlarged,
++              cv::Size (),
++              upscale,
++              upscale,
++              cv::INTER_CUBIC);
++  cv::createCLAHE (2.0, cv::Size (4, 8))->apply (enlarged, normalized);
++  cv::SIFT::create (maximum_features, 3, 0.01, 15, 1.6)
++    ->detectAndCompute (normalized,
++                        cv::noArray (),
++                        keypoints,
++                        descriptors);
++
++  if (keypoints.size () < minimum_features || descriptors.empty ())
++    {
++      g_set_error_literal (error,
++                           G_IO_ERROR,
++                           G_IO_ERROR_FAILED,
++                           "Fingerprint contains too few stable features");
++      return nullptr;
++    }
++
++  encoded.reserve (feature_header_size +
++                   keypoints.size () *
++                   (2 + descriptor_columns) * sizeof (guint32));
++  encoded.insert (encoded.end (),
++                  feature_magic,
++                  feature_magic + sizeof (feature_magic) - 1);
++  append_u32 (encoded, keypoints.size ());
++  for (gsize row = 0; row < keypoints.size (); row++)
++    {
++      append_float (encoded, keypoints[row].pt.x);
++      append_float (encoded, keypoints[row].pt.y);
++      for (guint column = 0; column < descriptor_columns; column++)
++        append_float (encoded, descriptors.at<float> (row, column));
++    }
++
++  return g_bytes_new_take (g_memdup2 (encoded.data (), encoded.size ()),
++                           encoded.size ());
++}
++
++gboolean
++syna0082_matcher_compare (const guint8       *reference,
++                          gsize               reference_length,
++                          const guint8       *probe,
++                          gsize               probe_length,
++                          Syna0082MatchScore *score,
++                          GError             **error)
++{
++  FeatureSet reference_features;
++  FeatureSet probe_features;
++  std::vector<std::vector<cv::DMatch>> pairs;
++  std::vector<cv::DMatch> matches;
++  std::vector<cv::Point2f> reference_points;
++  std::vector<cv::Point2f> probe_points;
++  cv::Mat inlier_mask;
++  cv::Mat transform;
++
++  g_return_val_if_fail (score != nullptr, FALSE);
++  *score = {};
++
++  if (!decode_features (reference,
++                        reference_length,
++                        &reference_features,
++                        error) ||
++      !decode_features (probe, probe_length, &probe_features, error))
++    return FALSE;
++
++  cv::BFMatcher (cv::NORM_L2).knnMatch (reference_features.descriptors,
++                                       probe_features.descriptors,
++                                       pairs,
++                                       2);
++  for (const auto &pair : pairs)
++    if (pair.size () == 2 &&
++        pair[0].distance < ratio_threshold * pair[1].distance)
++      matches.push_back (pair[0]);
++  score->matches = matches.size ();
++  if (matches.size () < 3)
++    return TRUE;
++
++  reference_points.reserve (matches.size ());
++  probe_points.reserve (matches.size ());
++  for (const auto &match : matches)
++    {
++      reference_points.push_back (reference_features.points[match.queryIdx]);
++      probe_points.push_back (probe_features.points[match.trainIdx]);
++    }
++
++  transform = cv::estimateAffinePartial2D (reference_points,
++                                           probe_points,
++                                           inlier_mask,
++                                           cv::RANSAC,
++                                           ransac_threshold,
++                                           3000,
++                                           0.997,
++                                           10);
++  if (transform.empty () || inlier_mask.empty ())
++    return TRUE;
++
++  std::vector<cv::Point2f> inlier_points;
++  for (gsize index = 0; index < matches.size (); index++)
++    if (inlier_mask.at<guint8> (index) != 0)
++      inlier_points.push_back (reference_points[index]);
++
++  score->inliers = inlier_points.size ();
++  score->inlier_ratio = static_cast<double> (score->inliers) / matches.size ();
++  score->scale = std::hypot (transform.at<double> (0, 0),
++                             transform.at<double> (1, 0));
++  score->rotation = std::atan2 (transform.at<double> (1, 0),
++                                transform.at<double> (0, 0)) * 180.0 / G_PI;
++  if (inlier_points.size () >= 2)
++    {
++      float minimum_x = inlier_points[0].x;
++      float maximum_x = inlier_points[0].x;
++      float minimum_y = inlier_points[0].y;
++      float maximum_y = inlier_points[0].y;
++
++      for (const auto &point : inlier_points)
++        {
++          minimum_x = std::min (minimum_x, point.x);
++          maximum_x = std::max (maximum_x, point.x);
++          minimum_y = std::min (minimum_y, point.y);
++          maximum_y = std::max (maximum_y, point.y);
++        }
++      score->coverage =
++        ((maximum_x - minimum_x) * (maximum_y - minimum_y)) /
++        ((native_width * upscale) * (native_height * upscale));
++    }
++  score->accepted = score->inliers >= minimum_inliers &&
++                    score->inlier_ratio >= minimum_inlier_ratio &&
++                    score->scale >= 0.70 && score->scale <= 1.35 &&
++                    score->coverage >= minimum_coverage;
++  return TRUE;
++}
+diff --git a/libfprint/drivers/syna0082-matcher.h b/libfprint/drivers/syna0082-matcher.h
+new file mode 100644
+index 0000000..6642c5b
+--- /dev/null
++++ b/libfprint/drivers/syna0082-matcher.h
+@@ -0,0 +1,36 @@
++/*
++ * Independent small-area matcher for Synaptics/PQI 06cb:0082.
++ *
++ * This implementation contains no proprietary Synaptics code or data.
++ */
++
++#pragma once
++
++#include <gio/gio.h>
++
++G_BEGIN_DECLS
++
++typedef struct
++{
++  guint   matches;
++  guint   inliers;
++  gdouble inlier_ratio;
++  gdouble scale;
++  gdouble rotation;
++  gdouble coverage;
++  gboolean accepted;
++} Syna0082MatchScore;
++
++GBytes *syna0082_matcher_extract (const guint8 *pixels,
++                                  guint         width,
++                                  guint         height,
++                                  GError      **error);
++
++gboolean syna0082_matcher_compare (const guint8       *reference,
++                                   gsize               reference_length,
++                                   const guint8       *probe,
++                                   gsize               probe_length,
++                                   Syna0082MatchScore *score,
++                                   GError             **error);
++
++G_END_DECLS
+diff --git a/libfprint/drivers/syna0082.c b/libfprint/drivers/syna0082.c
+index 0fb9341..7ea6011 100644
+--- a/libfprint/drivers/syna0082.c
++++ b/libfprint/drivers/syna0082.c
+@@ -9,6 +9,7 @@
+ #define FP_COMPONENT "syna0082"
+ 
+ #include "drivers_api.h"
++#include "syna0082-matcher.h"
+ 
+ #define EP_OUT 0x01
+ #define EP_IN 0x81
+@@ -23,6 +24,7 @@
+ #define IMAGE_HEADER_LENGTH 18
+ #define IMAGE_WIDTH 56
+ #define IMAGE_HEIGHT 144
++#define RELEASE_QUIET_MS 600
+ 
+ typedef struct _FpiDeviceSyna0082 FpiDeviceSyna0082;
+ 
+@@ -37,6 +39,7 @@ struct _FpiDeviceSyna0082
+   gsize          rearm_stage;
+   guint          capture_count;
+   gboolean       deactivating;
++  gboolean       awaiting_release;
+ };
+ 
+ G_DECLARE_FINAL_TYPE (FpiDeviceSyna0082, fpi_device_syna0082,
+@@ -124,6 +127,8 @@ capture_read_cb (FpiUsbTransfer *transfer,
+   FpImage *image;
+   guint16 width;
+   guint16 height;
++  guint x;
++  guint y;
+ 
+   if (error)
+     {
+@@ -157,13 +162,20 @@ capture_read_cb (FpiUsbTransfer *transfer,
+     }
+ 
+   image = fp_image_new (width, height);
+-  memcpy (image->data,
+-          transfer->buffer + IMAGE_HEADER_LENGTH,
+-          width * height);
++  /* The device serializes 56 sensor columns of 144 pixels each. FpImage
++   * expects a conventional row-major raster, so transpose while copying. */
++  for (y = 0; y < height; y++)
++    for (x = 0; x < width; x++)
++      image->data[y * width + x] =
++        transfer->buffer[IMAGE_HEADER_LENGTH + x * height + y];
+   image->flags |= FPI_IMAGE_PARTIAL;
+   self->capture_count++;
+   fpi_image_device_image_captured (FP_IMAGE_DEVICE (self), image);
+-  fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), FALSE);
++  /* This sensor only reports repeated finger-on events. Keep listening until
++   * they have stopped for a short interval before reporting finger-off, so a
++   * held finger cannot satisfy two enrollment stages. */
++  self->awaiting_release = TRUE;
++  start_interrupt (self);
+ }
+ 
+ static void
+@@ -218,6 +230,22 @@ interrupt_cb (FpiUsbTransfer *transfer,
+ 
+   if (error)
+     {
++      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
++        {
++          g_clear_error (&error);
++          complete_deactivation (self);
++          return;
++        }
++      if (self->awaiting_release &&
++          g_error_matches (error,
++                           G_USB_DEVICE_ERROR,
++                           G_USB_DEVICE_ERROR_TIMED_OUT))
++        {
++          g_clear_error (&error);
++          self->awaiting_release = FALSE;
++          fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), FALSE);
++          return;
++        }
+       fail_session_or_deactivate (self, error);
+       return;
+     }
+@@ -225,8 +253,13 @@ interrupt_cb (FpiUsbTransfer *transfer,
+       (transfer->buffer[1] == 0x42 || transfer->buffer[1] == 0x43) &&
+       transfer->buffer[2] == 0x04)
+     {
+-      fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), TRUE);
+-      start_capture (self);
++      if (self->awaiting_release)
++        start_interrupt (self);
++      else
++        {
++          fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), TRUE);
++          start_capture (self);
++        }
+     }
+   else
+     start_interrupt (self);
+@@ -248,7 +281,7 @@ start_interrupt (FpiDeviceSyna0082 *self)
+   fpi_usb_transfer_fill_interrupt (transfer, EP_INTERRUPT, 5);
+   transfer->short_is_error = TRUE;
+   fpi_usb_transfer_submit (transfer,
+-                           0,
++                           self->awaiting_release ? RELEASE_QUIET_MS : 0,
+                            fpi_device_get_cancellable (device),
+                            interrupt_cb,
+                            NULL);
+@@ -393,6 +426,7 @@ dev_activate (FpImageDevice *image_device)
+   self->deactivating = FALSE;
+   self->init_stage = 0;
+   self->capture_count = 0;
++  self->awaiting_release = FALSE;
+   transfer = fpi_usb_transfer_new (FP_DEVICE (self));
+   fpi_usb_transfer_fill_control (transfer,
+                                  G_USB_DEVICE_DIRECTION_DEVICE_TO_HOST,
+@@ -570,6 +604,153 @@ static const FpIdEntry id_table[] = {
+   { .vid = 0, .pid = 0 },
+ };
+ 
++static gboolean
++print_get_data (FpPrint    *print,
++                const char *expected_type,
++                GVariant  **data,
++                GError    **error)
++{
++  g_object_get (print, "fpi-data", data, NULL);
++  if (*data && g_variant_is_of_type (*data, G_VARIANT_TYPE (expected_type)))
++    return TRUE;
++
++  g_clear_pointer (data, g_variant_unref);
++  g_set_error_literal (error,
++                       G_IO_ERROR,
++                       G_IO_ERROR_INVALID_DATA,
++                       "Invalid 06cb:0082 print data");
++  return FALSE;
++}
++
++static gboolean
++dev_extract_print (FpImageDevice *image_device,
++                   FpImage       *image,
++                   FpPrint      **print,
++                   GError       **error)
++{
++  g_autoptr(GBytes) features = NULL;
++  g_autoptr(GVariant) data = NULL;
++  gconstpointer bytes;
++  gsize length;
++
++  features = syna0082_matcher_extract (image->data,
++                                      image->width,
++                                      image->height,
++                                      error);
++  if (!features)
++    {
++      g_autofree gchar *message = g_strdup ((*error)->message);
++
++      g_clear_error (error);
++      *error = fpi_device_retry_new_msg (FP_DEVICE_RETRY_GENERAL, "%s", message);
++      return FALSE;
++    }
++
++  bytes = g_bytes_get_data (features, &length);
++  data = g_variant_ref_sink (
++    g_variant_new_fixed_array (G_VARIANT_TYPE_BYTE, bytes, length, 1));
++  *print = fp_print_new (FP_DEVICE (image_device));
++  fpi_print_set_type (*print, FPI_PRINT_RAW);
++  g_object_set (*print, "fpi-data", data, NULL);
++  return TRUE;
++}
++
++static gboolean
++dev_append_print (FpImageDevice *image_device,
++                  FpPrint       *enroll_print,
++                  FpPrint       *scan_print,
++                  GError       **error)
++{
++  g_autoptr(GVariant) gallery = NULL;
++  g_autoptr(GVariant) scan = NULL;
++  g_autoptr(GVariant) result = NULL;
++  GVariantBuilder builder;
++
++  (void) image_device;
++
++  if (!print_get_data (scan_print, "ay", &scan, error))
++    return FALSE;
++
++  g_object_get (enroll_print, "fpi-data", &gallery, NULL);
++  if (gallery && !g_variant_is_of_type (gallery, G_VARIANT_TYPE ("aay")))
++    {
++      g_set_error_literal (error,
++                           G_IO_ERROR,
++                           G_IO_ERROR_INVALID_DATA,
++                           "Invalid 06cb:0082 enrollment gallery");
++      return FALSE;
++    }
++
++  g_variant_builder_init (&builder, G_VARIANT_TYPE ("aay"));
++  if (gallery)
++    for (gsize index = 0; index < g_variant_n_children (gallery); index++)
++      g_variant_builder_add_value (&builder,
++                                   g_variant_get_child_value (gallery, index));
++  g_variant_builder_add_value (&builder, g_variant_ref (scan));
++  result = g_variant_ref_sink (g_variant_builder_end (&builder));
++
++  g_object_set (enroll_print, "fpi-data", result, NULL);
++  return TRUE;
++}
++
++static FpiMatchResult
++dev_match_print (FpImageDevice *image_device,
++                 FpPrint       *template_print,
++                 FpPrint       *scan_print,
++                 GError       **error)
++{
++  g_autoptr(GVariant) gallery = NULL;
++  g_autoptr(GVariant) scan = NULL;
++  const guint8 *scan_bytes;
++  gsize scan_length;
++  guint accepted = 0;
++  guint best_inliers = 0;
++
++  (void) image_device;
++
++  if (!print_get_data (template_print, "aay", &gallery, error) ||
++      !print_get_data (scan_print, "ay", &scan, error))
++    return FPI_MATCH_ERROR;
++
++  scan_bytes = g_variant_get_fixed_array (scan, &scan_length, 1);
++  for (gsize index = 0; index < g_variant_n_children (gallery); index++)
++    {
++      g_autoptr(GVariant) reference =
++        g_variant_get_child_value (gallery, index);
++      const guint8 *reference_bytes;
++      gsize reference_length;
++      Syna0082MatchScore score;
++
++      reference_bytes = g_variant_get_fixed_array (reference,
++                                                   &reference_length,
++                                                   1);
++      if (!syna0082_matcher_compare (reference_bytes,
++                                    reference_length,
++                                    scan_bytes,
++                                    scan_length,
++                                    &score,
++                                    error))
++        return FPI_MATCH_ERROR;
++
++      fp_dbg ("gallery[%" G_GSIZE_FORMAT "]: matches=%u inliers=%u "
++              "ratio=%.3f scale=%.3f rotation=%.1f coverage=%.4f accepted=%d",
++              index,
++              score.matches,
++              score.inliers,
++              score.inlier_ratio,
++              score.scale,
++              score.rotation,
++              score.coverage,
++              score.accepted);
++      if (score.accepted)
++        accepted++;
++      best_inliers = MAX (best_inliers, score.inliers);
++    }
++
++  return accepted > 0 && (best_inliers >= 8 || accepted >= 2) ?
++         FPI_MATCH_SUCCESS : FPI_MATCH_FAIL;
++}
++
+ static void
+ fpi_device_syna0082_init (FpiDeviceSyna0082 *self)
+ {
+@@ -592,7 +773,9 @@ fpi_device_syna0082_class_init (FpiDeviceSyna0082Class *klass)
+   image_class->activate = dev_activate;
+   image_class->change_state = dev_change_state;
+   image_class->deactivate = dev_deactivate;
+-  image_class->bz3_threshold = 20;
++  image_class->extract_print = dev_extract_print;
++  image_class->append_print = dev_append_print;
++  image_class->match_print = dev_match_print;
+   image_class->img_width = IMAGE_WIDTH;
+   image_class->img_height = IMAGE_HEIGHT;
+ }
+diff --git a/libfprint/fp-image-device.c b/libfprint/fp-image-device.c
+index ac88ffd..06794e8 100644
+--- a/libfprint/fp-image-device.c
++++ b/libfprint/fp-image-device.c
+@@ -98,6 +98,7 @@ static void
+ fp_image_device_start_capture_action (FpDevice *device)
+ {
+   FpImageDevice *self = FP_IMAGE_DEVICE (device);
++  FpImageDeviceClass *cls = FP_IMAGE_DEVICE_GET_CLASS (self);
+   FpImageDevicePrivate *priv = fp_image_device_get_instance_private (self);
+   FpiDeviceAction action;
+   FpiPrintType print_type;
+@@ -125,8 +126,17 @@ fp_image_device_start_capture_action (FpDevice *device)
+ 
+       fpi_device_get_enroll_data (device, &enroll_print);
+       g_object_get (enroll_print, "fpi-type", &print_type, NULL);
+-      if (print_type != FPI_PRINT_NBIS)
+-        fpi_print_set_type (enroll_print, FPI_PRINT_NBIS);
++      if (print_type == FPI_PRINT_UNDEFINED)
++        fpi_print_set_type (enroll_print,
++                            cls->extract_print ? FPI_PRINT_RAW : FPI_PRINT_NBIS);
++      else if (print_type != (cls->extract_print ? FPI_PRINT_RAW : FPI_PRINT_NBIS))
++        {
++          fpi_device_action_error (
++            device,
++            fpi_device_error_new_msg (FP_DEVICE_ERROR_DATA_INVALID,
++                                      "Enrollment print has the wrong type"));
++          return;
++        }
+     }
+ 
+   priv->enroll_stage = 0;
+diff --git a/libfprint/fpi-image-device.c b/libfprint/fpi-image-device.c
+index 87bdc60..9fcd0dc 100644
+--- a/libfprint/fpi-image-device.c
++++ b/libfprint/fpi-image-device.c
+@@ -239,77 +239,48 @@ fp_image_device_maybe_complete_action (FpImageDevice *self, GError *error)
+ }
+ 
+ static void
+-fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, gpointer user_data)
++fp_image_device_process_print (FpImageDevice *self,
++                               FpImage       *image,
++                               FpPrint       *print,
++                               GError        *error)
+ {
+-  g_autoptr(FpImage) image = FP_IMAGE (source_object);
+-  g_autoptr(FpPrint) print = NULL;
+-  GError *error = NULL;
+-  FpImageDevice *self = FP_IMAGE_DEVICE (user_data);
++  g_autoptr(FpImage) owned_image = image;
++  g_autoptr(FpPrint) owned_print = print;
+   FpDevice *device = FP_DEVICE (self);
+-  FpImageDevicePrivate *priv;
++  FpImageDeviceClass *cls = FP_IMAGE_DEVICE_GET_CLASS (self);
++  FpImageDevicePrivate *priv = fp_image_device_get_instance_private (self);
+   FpiDeviceAction action;
+ 
+-  /* Note: We rely on the device to not disappear during an operation. */
+-  priv = fp_image_device_get_instance_private (FP_IMAGE_DEVICE (device));
+-  priv->minutiae_scan_active = FALSE;
+-
+-  if (!fp_image_detect_minutiae_finish (image, res, &error))
+-    {
+-      /* Cancel operation . */
+-      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+-        {
+-          fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
+-          fpi_image_device_deactivate (self, TRUE);
+-          return;
+-        }
+-
+-      /* Replace error with a retry condition. */
+-      g_warning ("Failed to detect minutiae: %s", error->message);
+-      g_clear_pointer (&error, g_error_free);
+-
+-      error = fpi_device_retry_new_msg (FP_DEVICE_RETRY_GENERAL, "Minutiae detection failed, please retry");
+-    }
+-
+   action = fpi_device_get_current_action (device);
+ 
+   if (action == FPI_DEVICE_ACTION_CAPTURE)
+     {
+-      priv->capture_image = g_steal_pointer (&image);
++      priv->capture_image = g_steal_pointer (&owned_image);
+       fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
+       return;
+     }
+ 
+-  if (!error)
+-    {
+-      print = fp_print_new (device);
+-      fpi_print_set_type (print, FPI_PRINT_NBIS);
+-      if (!fpi_print_add_from_image (print, image, &error))
+-        {
+-          g_clear_object (&print);
+-
+-          if (error->domain != FP_DEVICE_RETRY)
+-            {
+-              fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
+-              /* We might not yet be deactivating, if we are enrolling. */
+-              fpi_image_device_deactivate (self, TRUE);
+-              return;
+-            }
+-        }
+-    }
+-
+   if (action == FPI_DEVICE_ACTION_ENROLL)
+     {
+       FpPrint *enroll_print;
+       fpi_device_get_enroll_data (device, &enroll_print);
+ 
+-      if (print)
++      if (owned_print)
+         {
+-          fpi_print_add_print (enroll_print, print);
+-          priv->enroll_stage += 1;
++          if (cls->append_print)
++            {
++              if (cls->append_print (self, enroll_print, owned_print, &error))
++                priv->enroll_stage += 1;
++            }
++          else
++            {
++              fpi_print_add_print (enroll_print, owned_print);
++              priv->enroll_stage += 1;
++            }
+         }
+ 
+       fpi_device_enroll_progress (device, priv->enroll_stage,
+-                                  g_steal_pointer (&print), error);
++                                  g_steal_pointer (&owned_print), error);
+ 
+       /* Start another scan or deactivate. */
+       if (priv->enroll_stage == fp_device_get_nr_enroll_stages (device))
+@@ -333,7 +304,14 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
+         {
+           FpPrint *template = g_ptr_array_index (templates, i);
+ 
+-          if (fpi_print_bz3_match (template, print, priv->bz3_threshold, &error) == FPI_MATCH_SUCCESS)
++          FpiMatchResult match;
++
++          if (cls->match_print)
++            match = cls->match_print (self, template, owned_print, &error);
++          else
++            match = fpi_print_bz3_match (template, owned_print, priv->bz3_threshold, &error);
++
++          if (match == FPI_MATCH_SUCCESS)
+             {
+               result = template;
+               break;
+@@ -341,7 +319,18 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
+         }
+ 
+       if (!error || error->domain == FP_DEVICE_RETRY)
+-        fpi_device_identify_report (device, result, g_steal_pointer (&print), g_steal_pointer (&error));
++        {
++          /* A custom matcher already selected the gallery entry. Passing its
++           * independently extracted probe through the generic raw-print
++           * equality check would produce a misleading warning. */
++          FpPrint *report_print = result && cls->match_print ?
++                                  NULL : g_steal_pointer (&owned_print);
++
++          fpi_device_identify_report (device,
++                                      result,
++                                      report_print,
++                                      g_steal_pointer (&error));
++        }
+ 
+       fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
+     }
+@@ -357,6 +346,57 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
+     }
+ }
+ 
++static void
++fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, gpointer user_data)
++{
++  g_autoptr(FpImage) image = FP_IMAGE (source_object);
++  g_autoptr(FpPrint) print = NULL;
++  GError *error = NULL;
++  FpImageDevice *self = FP_IMAGE_DEVICE (user_data);
++  FpDevice *device = FP_DEVICE (self);
++  FpImageDevicePrivate *priv;
++
++  /* Note: We rely on the device to not disappear during an operation. */
++  priv = fp_image_device_get_instance_private (self);
++  priv->minutiae_scan_active = FALSE;
++
++  if (!fp_image_detect_minutiae_finish (image, res, &error))
++    {
++      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
++        {
++          fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
++          fpi_image_device_deactivate (self, TRUE);
++          return;
++        }
++
++      g_warning ("Failed to detect minutiae: %s", error->message);
++      g_clear_pointer (&error, g_error_free);
++      error = fpi_device_retry_new_msg (FP_DEVICE_RETRY_GENERAL,
++                                        "Minutiae detection failed, please retry");
++    }
++
++  if (!error && fpi_device_get_current_action (device) != FPI_DEVICE_ACTION_CAPTURE)
++    {
++      print = fp_print_new (device);
++      fpi_print_set_type (print, FPI_PRINT_NBIS);
++      if (!fpi_print_add_from_image (print, image, &error))
++        {
++          g_clear_object (&print);
++          if (error->domain != FP_DEVICE_RETRY)
++            {
++              fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
++              fpi_image_device_deactivate (self, TRUE);
++              return;
++            }
++        }
++    }
++
++  fp_image_device_process_print (self,
++                                 g_steal_pointer (&image),
++                                 g_steal_pointer (&print),
++                                 error);
++}
++
+ /*********************************************************/
+ /* Private API */
+ 
+@@ -469,6 +509,7 @@ void
+ fpi_image_device_image_captured (FpImageDevice *self, FpImage *image)
+ {
+   FpImageDevicePrivate *priv = fp_image_device_get_instance_private (self);
++  FpImageDeviceClass *cls = FP_IMAGE_DEVICE_GET_CLASS (self);
+   FpiDeviceAction action;
+ 
+   action = fpi_device_get_current_action (FP_DEVICE (self));
+@@ -483,6 +524,21 @@ fpi_image_device_image_captured (FpImageDevice *self, FpImage *image)
+ 
+   priv->minutiae_scan_active = TRUE;
+ 
++  /* XXX: This is wrong if we add support for raw capture mode. */
++  fp_image_device_change_state (self, FPI_IMAGE_DEVICE_STATE_AWAIT_FINGER_OFF);
++
++  if (cls->extract_print && action != FPI_DEVICE_ACTION_CAPTURE)
++    {
++      g_autoptr(FpPrint) print = NULL;
++      GError *error = NULL;
++
++      if (!cls->extract_print (self, image, &print, &error))
++        g_clear_object (&print);
++      priv->minutiae_scan_active = FALSE;
++      fp_image_device_process_print (self, image, g_steal_pointer (&print), error);
++      return;
++    }
++
+   /* XXX: We also detect minutiae in capture mode, we solely do this
+    *      to normalize the image which will happen as a by-product. */
+   fp_image_detect_minutiae (image,
+@@ -490,8 +546,6 @@ fpi_image_device_image_captured (FpImageDevice *self, FpImage *image)
+                             fpi_image_device_minutiae_detected,
+                             self);
+ 
+-  /* XXX: This is wrong if we add support for raw capture mode. */
+-  fp_image_device_change_state (self, FPI_IMAGE_DEVICE_STATE_AWAIT_FINGER_OFF);
+ }
+ 
+ /**
+diff --git a/libfprint/fpi-image-device.h b/libfprint/fpi-image-device.h
+index 71472db..db00cae 100644
+--- a/libfprint/fpi-image-device.h
++++ b/libfprint/fpi-image-device.h
+@@ -114,6 +114,21 @@ struct _FpImageDeviceClass
+   void          (*change_state) (FpImageDevice      *dev,
+                                  FpiImageDeviceState state);
+   void          (*deactivate)   (FpImageDevice *dev);
++
++  /* Optional feature extraction and matching hooks for image sensors whose
++   * geometry is not suitable for the generic NBIS pipeline. */
++  gboolean      (*extract_print) (FpImageDevice *dev,
++                                  FpImage       *image,
++                                  FpPrint      **print,
++                                  GError       **error);
++  gboolean      (*append_print)  (FpImageDevice *dev,
++                                  FpPrint       *enroll_print,
++                                  FpPrint       *scan_print,
++                                  GError       **error);
++  FpiMatchResult (*match_print)   (FpImageDevice *dev,
++                                   FpPrint       *template_print,
++                                   FpPrint       *scan_print,
++                                   GError       **error);
+ };
+ 
+ void fpi_image_device_set_bz3_threshold (FpImageDevice *self,
+diff --git a/libfprint/meson.build b/libfprint/meson.build
+index 4c262da..e60c5e2 100644
+--- a/libfprint/meson.build
++++ b/libfprint/meson.build
+@@ -130,7 +130,10 @@ driver_sources = {
+         'drivers/synaptics/synaptics.c',
+         'drivers/synaptics/bmkt_message.c',
+     ),
+-    'syna0082' : files('drivers/syna0082.c'),
++    'syna0082' : files(
++        'drivers/syna0082.c',
++        'drivers/syna0082-matcher.cpp',
++    ),
+     'goodixmoc' : files(
+         'drivers/goodixmoc/goodix.c',
+         'drivers/goodixmoc/goodix_proto.c',
+@@ -147,6 +150,7 @@ helper_sources = {
+     'aesx660': files('drivers/aesx660.c'),
+     'aes3k': files('drivers/aes3k.c'),
+     'openssl': files(),
++    'opencv': files(),
+     'pixman': files(),
+     'udev': files(),
+     'virtual': files('drivers/virtual-device-listener.c'),
+diff --git a/meson.build b/meson.build
+index 34ae0b5..5fb6f74 100644
+--- a/meson.build
++++ b/meson.build
+@@ -5,6 +5,7 @@ project('libfprint', [ 'c', 'cpp' ],
+         'buildtype=debugoptimized',
+         'warning_level=1',
+         'c_std=gnu99',
++        'cpp_std=gnu++17',
+     ],
+     meson_version: '>= 0.62.0')
+ 
+@@ -134,7 +135,7 @@ drivers_info = {
+     'egis_etu905': {},
+     'vcom5s': {},
+     'synaptics': {},
+-    'syna0082': {},
++    'syna0082': { 'helper': ['opencv'] },
+     'elan': { 'endian_dependent': true },
+     'elanmoc': {},
+     'uru4000': { 'helper': ['openssl'] },
+@@ -244,6 +245,46 @@ foreach i : driver_helpers
+         endif
+ 
+         optional_deps += openssl_dep
++    elif i == 'opencv'
++        opencv_pkg_dep = dependency('opencv5', required: false)
++        opencv_features_dep = cpp.find_library('opencv_features', required: false)
++        opencv_calib_dep = cpp.find_library('opencv_calib', required: false)
++        if not opencv_pkg_dep.found()
++            opencv_pkg_dep = dependency('opencv4', required: false)
++            opencv_features_dep = cpp.find_library('opencv_features2d', required: false)
++            opencv_calib_dep = cpp.find_library('opencv_calib3d', required: false)
++        endif
++        opencv_core_dep = cpp.find_library('opencv_core', required: false)
++        opencv_imgproc_dep = cpp.find_library('opencv_imgproc', required: false)
++        opencv_flann_dep = cpp.find_library('opencv_flann', required: false)
++        opencv_geometry_dep = cpp.find_library('opencv_geometry', required: false)
++        if not opencv_pkg_dep.found() or not opencv_core_dep.found() or not opencv_imgproc_dep.found() or not opencv_features_dep.found() or not opencv_calib_dep.found() or not opencv_flann_dep.found()
++            error('OpenCV is required for @0@ and possibly others'.format(driver))
++        endif
++
++        # The aggregate OpenCV pkg-config file pulls in optional modules such
++        # as VTK and HDF. Keep its include flags, but link only what this
++        # matcher actually uses.
++        opencv_module_deps = [
++            opencv_core_dep,
++            opencv_imgproc_dep,
++            opencv_features_dep,
++            opencv_calib_dep,
++            opencv_flann_dep,
++        ]
++        if opencv_geometry_dep.found()
++            opencv_module_deps += opencv_geometry_dep
++        endif
++        opencv_include = include_directories(
++            opencv_pkg_dep.get_variable(pkgconfig: 'includedir'),
++            is_system: true,
++        )
++        opencv_dep = declare_dependency(
++            include_directories: opencv_include,
++            dependencies: opencv_module_deps,
++        )
++
++        optional_deps += opencv_dep
+     elif i == 'udev'
+         install_udev_rules = true
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+repo=${SYNA0082_REPO:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}
+package_dir=${SYNA0082_PACKAGE_DIR:-/home/alperen/fingerprint-lab/package-build}
+
+mkdir -p "$package_dir"
+cp "$repo/packaging/arch/PKGBUILD" "$package_dir/PKGBUILD"
+cd "$package_dir"
+makepkg --cleanbuild --clean --syncdeps --noconfirm

@@ -40,6 +40,10 @@ contains partial USB experiments, not a working driver.
 - `tools/usbpcap-summary.py`: normalize one USB device's capture to JSON Lines.
 - `tools/syna0082-image-summary.py`: validate raw image records and optionally
   extract them outside any Git worktree.
+- `tools/syna0082_matcher.py`: independent descriptor-gallery matcher for the
+  reader's unusually small image area; see `docs/matcher.md` for safety gates.
+- `patches/libfprint/syna0082-matcher.cpp`: the same independent matcher
+  integrated into the experimental libfprint image-device flow.
 - `tools/syna0082-extract-init.py`: extract device-specific initialization
   blobs outside Git without replaying them.
 - `probe/syna0082-info.c`: descriptor-only Linux inventory; it never opens the
@@ -53,7 +57,10 @@ contains partial USB experiments, not a working driver.
 - `udev/60-usbmon-wireshark.rules`: permits reproducible Linux USB captures
   for members of the `wireshark` group.
 - `docs/capture-matrix.md`: repeatable Windows traffic-capture procedure.
+- `docs/matcher.md`: matcher design, template handling, and validation status.
 - `patches/`: eventual patches against a pinned upstream libfprint commit.
+- `packaging/arch/PKGBUILD`: reversible Arch package for fprintd integration;
+  it replaces `libfprint-git` only when explicitly installed with pacman.
 
 ## Development gates
 

@@ -6,6 +6,7 @@ __pycache__/
 .venv/
 build/
 work/
+.work-upstream/
 *.pcap
 *.pcapng
 *.pcap.gz

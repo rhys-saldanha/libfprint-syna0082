@@ -14,5 +14,7 @@ pacman -S --needed --noconfirm \
   gobject-introspection \
   python-cairo \
   python-gobject \
+  python-numpy \
+  opencv \
   umockdev \
   gtk-doc

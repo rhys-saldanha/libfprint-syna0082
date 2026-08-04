@@ -1,0 +1,33 @@
+pkgname=libfprint-syna0082-git
+pkgver=1.94.100.r0.g92f1a52
+pkgrel=1
+pkgdesc='libfprint development build with experimental Synaptics/PQI 06cb:0082 support'
+arch=(x86_64)
+url='https://fprint.freedesktop.org/'
+license=(LGPL-2.1-or-later)
+groups=(fprint)
+depends=(gcc-libs glib2 glibc libgudev libgusb opencv openssl pixman)
+makedepends=(git glib2-devel gobject-introspection meson python-cairo python-gobject)
+checkdepends=(cairo umockdev)
+provides=(libfprint 'libfprint-2.so=2-64')
+conflicts=(libfprint libfprint-git)
+source=('libfprint::git+file:///home/alperen/src/libfprint-06cb0082')
+sha256sums=(SKIP)
+
+pkgver() {
+  cd libfprint
+  printf '1.94.100.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  arch-meson libfprint build -Ddoc=false
+  meson compile -C build
+}
+
+check() {
+  meson test -C build --print-errorlogs
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+}

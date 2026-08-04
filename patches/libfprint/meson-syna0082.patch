@@ -1,0 +1,23 @@
+diff --git a/meson.build b/meson.build
+index 61f923c..0000000 100644
+--- a/meson.build
++++ b/meson.build
+@@ -127,5 +127,6 @@ drivers_info = {
+     'vcom5s': {},
+     'synaptics': {},
++    'syna0082': {},
+     'elan': { 'endian_dependent': true },
+     'elanmoc': {},
+     'uru4000': { 'helper': ['openssl'] },
+diff --git a/libfprint/meson.build b/libfprint/meson.build
+index 9d9588d..0000000 100644
+--- a/libfprint/meson.build
++++ b/libfprint/meson.build
+@@ -126,6 +126,7 @@ driver_sources = {
+         'drivers/synaptics/synaptics.c',
+         'drivers/synaptics/bmkt_message.c',
+     ),
++    'syna0082' : files('drivers/syna0082.c'),
+     'goodixmoc' : files(
+         'drivers/goodixmoc/goodix.c',
+         'drivers/goodixmoc/goodix_proto.c',

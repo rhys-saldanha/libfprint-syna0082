@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+export LIBFPRINT_SYNA0082_BLOB_DIR="${LIBFPRINT_SYNA0082_BLOB_DIR:-/home/alperen/fingerprint-lab/device-data-06cb0082}"
+libfprint_build="${LIBFPRINT_BUILD:-/home/alperen/src/libfprint-06cb0082/build}"
+
+# The upstream example numbers the right index finger as selection six.
+printf '6\n' | "$libfprint_build/examples/verify"
