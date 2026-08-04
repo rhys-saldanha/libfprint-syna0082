@@ -38,3 +38,9 @@ database erase, ownership reset, and firmware update paths. This does not by
 itself identify a USB opcode. It does show that the stable, high-entropy
 10,501-byte `0x06` record must not be treated as an ordinary public constant
 until its producer and security context are isolated.
+
+The producer has since been narrowed further: captured `0x06` bytes 1 through
+10,500 are a byte-identical contiguous `.rdata` table in this DLL. Run the
+inventory with `--payload` to reproduce the offsets and hashes without dumping
+the proprietary data. Its content semantics remain unresolved, so this finding
+does not yet make the record suitable for inclusion in an open driver.

@@ -124,6 +124,14 @@ plaintext. No sampled chunk from the 10,501-byte 0x06 payload occurs there.
 This establishes that 0x02 is substantially assembled from calibration data,
 while 0x06 has a different source.
 
+The source of `0x06` is now localized precisely. Bytes `[1, 10501)` of the
+captured message are identical to one contiguous 10,500-byte `.rdata` record
+in the reference DLL (file offset 1,694,432); only the leading `0x06` command
+byte is prepended. The DLL's adjacent descriptor records the same payload
+length as `0x2904`. Thus `0x06` is a static vendor table, not per-session
+ciphertext. The table is not copied into this repository; its internal format
+still needs an independent specification or generator.
+
 An exhaustive byte-sequence map strengthens that result: scan-matrix range
 `[10356, 18869)` is exactly calibration range `[8915, 17428)`. This single
 8,513-byte run accounts for 45.1163% of the complete `0x02` message. The

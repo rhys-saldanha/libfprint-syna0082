@@ -29,6 +29,12 @@ class DriverInventoryTests(unittest.TestCase):
         run.return_value = subprocess.CompletedProcess([], 0, "  Symbol: CryptGenRandom (42)\n", "")
         self.assertIn("CryptGenRandom", inventory.imported_symbols(Path("driver.dll")))
 
+    def test_maps_embedded_payload_suffix(self):
+        result = inventory.payload_provenance(b"\x06STATIC-TABLE", b"prefixSTATIC-TABLEsuffix")
+        self.assertEqual(result["embedded_suffix"], {
+            "payload_offset": 1, "binary_offset": 6, "length": 12,
+        })
+
 
 if __name__ == "__main__":
     unittest.main()

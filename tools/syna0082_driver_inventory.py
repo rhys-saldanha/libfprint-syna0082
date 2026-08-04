@@ -62,6 +62,24 @@ def inventory(path: Path) -> dict[str, object]:
         category: sorted(symbol for symbol in imports if pattern.match(symbol))
         for category, pattern in CATEGORIES.items()
     }
+
+
+def payload_provenance(payload: bytes, binary: bytes) -> dict[str, object]:
+    embedded = None
+    for payload_offset in range(len(payload)):
+        binary_offset = binary.find(payload[payload_offset:])
+        if binary_offset >= 0:
+            embedded = {
+                "payload_offset": payload_offset,
+                "binary_offset": binary_offset,
+                "length": len(payload) - payload_offset,
+            }
+            break
+    return {
+        "length": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "embedded_suffix": embedded,
+    }
     evidence = sorted(
         value for value in strings(data)
         if KEYWORDS.search(value) and len(value) <= 160
@@ -78,9 +96,15 @@ def inventory(path: Path) -> dict[str, object]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=Path)
+    parser.add_argument("--payload", type=Path, help="map a captured payload without printing its bytes")
     args = parser.parse_args()
     try:
-        print(json.dumps(inventory(args.binary), indent=2))
+        result = inventory(args.binary)
+        if args.payload:
+            result["payload_provenance"] = payload_provenance(
+                args.payload.read_bytes(), args.binary.read_bytes()
+            )
+        print(json.dumps(result, indent=2))
     except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
