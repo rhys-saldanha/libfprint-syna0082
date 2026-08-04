@@ -32,6 +32,7 @@ typedef struct
   const char *blob_dir;
   const char *output;
   bool omit_config_06;
+  bool flip_config_06_last_bit;
 } Options;
 
 typedef struct
@@ -58,11 +59,15 @@ parse_options (int argc, char **argv, Options *options)
         acknowledged = true;
       else if (strcmp (argv[i], "--experimental-omit-config-06") == 0)
         options->omit_config_06 = true;
+      else if (strcmp (argv[i],
+                       "--experimental-flip-config-06-last-bit") == 0)
+        options->flip_config_06_last_bit = true;
       else
         return false;
     }
 
-  return acknowledged && options->blob_dir != NULL && options->output != NULL;
+  return acknowledged && options->blob_dir != NULL && options->output != NULL &&
+         !(options->omit_config_06 && options->flip_config_06_last_bit);
 }
 
 static bool
@@ -434,6 +439,7 @@ main (int argc, char **argv)
       fprintf (stderr,
                "usage: %s --blob-dir DIR --output IMAGE.pgm "
                "[--experimental-omit-config-06] "
+               "[--experimental-flip-config-06-last-bit] "
                "--i-understand-device-state-will-change\n",
                argv[0]);
       return 2;
@@ -451,6 +457,13 @@ main (int argc, char **argv)
                   sizeof (scan_02),
                   0x02))
     return 1;
+
+  if (options.flip_config_06_last_bit)
+    {
+      config_06[sizeof (config_06) - 1] ^= 0x01;
+      fputs ("experiment=flip-config-06-last-bit offset=10500 mask=01\n",
+             stderr);
+    }
 
   result = libusb_init (&context);
   if (result != LIBUSB_SUCCESS)

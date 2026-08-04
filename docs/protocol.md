@@ -172,6 +172,23 @@ is not an unused Windows-driver artifact. The trial did not send reset,
 firmware, ownership, database, or template commands. Raw capture and probe log
 remain outside Git as `omit-config06-01`.
 
+## `0x06` integrity experiment
+
+An approved usbmon-recorded trial flipped only the least-significant bit of
+the protected container's final byte, at complete-message offset 10,500. All
+preceding initialization and the generated `0x39` succeeded normally. The
+mutated `0x06` returned the two-byte status `4f 04`. Sending the unchanged
+`0x02` afterward returned `44 04`, and acquisition was not entered.
+
+This distinguishes container validation from mere length/header acceptance:
+the device rejects a one-bit body change, then treats the security
+configuration prerequisite as unavailable. The result is consistent with a
+cryptographic integrity or authenticity check. It does not distinguish a MAC,
+signature, authenticated-encryption tag, encrypted checksum, or padding
+failure. The external evidence files are `flip-config06-last-bit-01`; the pcap
+SHA-256 is
+`a605c85d0a6a7b8f5f9bfbb5459de671185f10fb7d1472578f59dfe2d6fa35a5`.
+
 ## Verification outcomes
 
 The successful lock-screen capture has one acquisition followed by short

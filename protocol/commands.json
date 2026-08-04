@@ -8,9 +8,9 @@
   },
   "commands": {
     "01": {"name": "device_info", "lengths": [1], "responses": [38], "risk": "read-only", "confidence": "high", "generator": "literal"},
-    "02": {"name": "scan_matrix", "lengths": [18869], "responses": [2154], "error_responses": {"4404": "config_06 prerequisite omitted"}, "risk": "configuration", "confidence": "high", "generator": null, "mode_offset": 1749, "observed_modes": {"02": "initial", "13": "verify", "23": "enroll"}},
+    "02": {"name": "scan_matrix", "lengths": [18869], "responses": [2154], "error_responses": {"4404": "valid config_06 prerequisite unavailable"}, "risk": "configuration", "confidence": "high", "generator": null, "mode_offset": 1749, "observed_modes": {"02": "initial", "13": "verify", "23": "enroll"}},
     "04": {"name": "operation_finalize_a", "lengths": [1], "responses": [], "risk": "unknown", "confidence": "low", "generator": null},
-    "06": {"name": "security_configuration", "lengths": [10501], "responses": [2], "risk": "security", "confidence": "medium", "generator": null},
+    "06": {"name": "security_configuration", "lengths": [10501], "responses": [2], "error_responses": {"4f04": "protected container integrity or authenticity rejected"}, "risk": "security", "confidence": "high", "generator": null},
     "07": {"name": "cold_init_short", "lengths": [6], "responses": [], "risk": "configuration", "confidence": "low", "generator": null},
     "08": {"name": "cold_init_long", "lengths": [10], "responses": [], "risk": "configuration", "confidence": "low", "generator": null},
     "17": {"name": "operation_transition", "lengths": [1], "responses": [], "risk": "unknown", "confidence": "low", "generator": null},

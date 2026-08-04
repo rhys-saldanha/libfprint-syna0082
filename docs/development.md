@@ -91,6 +91,15 @@ status `44 04` from `0x02` rather than its 2,154-byte response. Therefore the
 driver must retain `0x06` until that static record has an independent open
 representation.
 
+The separately approved integrity trial used
+`--experimental-flip-config-06-last-bit` to change only bit 0 of the final
+container byte (message offset 10,500). The `0x06` exchange returned `4f 04`
+instead of success. The following unchanged `0x02` then returned `44 04`, the
+same missing-prerequisite status seen in the omission trial. No acquisition
+was attempted. This experimental flag is mutually exclusive with omission;
+`tools/run-saber-flip-config06-last-bit` records usbmon and refuses overwrite.
+Power-cycle the reader after running it.
+
 After a physical power cycle, the paired control run restored `0x06` while
 keeping the generated `0x39`. It received the normal 2,154-byte `0x02`
 response, observed the capture-ready event, and acquired a valid 56x144 frame.
