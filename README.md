@@ -32,6 +32,9 @@ contains partial USB experiments, not a working driver.
 - `tools/inventory-windows.ps1`: read-only Windows device/driver inventory.
 - `tools/inventory-linux`: read-only Linux USB/fprint inventory.
 - `tools/setup-saber-root`: reproducible Arch build/capture dependencies.
+- `tools/prepare-libfprint-source`, `tools/setup-arch-root`,
+  `tools/build-arch-package`, and `tools/install-arch-fprintd-root`: public,
+  path-independent Arch installation helpers.
 - `tools/capture-windows.ps1`: bounded, single-device USBPcap capture helper.
 - `tools/inspect-windows-calibration.ps1`: elevated, hash-only DPAPI
   inspection that never persists decrypted calibration data.
@@ -62,6 +65,9 @@ contains partial USB experiments, not a working driver.
   integrated into the experimental libfprint image-device flow.
 - `tools/syna0082-extract-init.py`: extract device-specific initialization
   blobs outside Git without replaying them.
+- `tools/syna0082_provision.py`: provision the two private initialization
+  records from a user's normalized capture, optionally verifying `0x06`
+  against a locally installed vendor DLL.
 - `probe/syna0082-info.c`: descriptor-only Linux inventory; it never opens the
   device or sends transfers.
 - `probe/syna0082-query.c`: guarded 0x01/0x19/0x3e information-query probe;
@@ -75,6 +81,8 @@ contains partial USB experiments, not a working driver.
   for members of the `wireshark` group.
 - `docs/capture-matrix.md`: repeatable Windows traffic-capture procedure.
 - `docs/matcher.md`: matcher design, template handling, and validation status.
+- `docs/install.md`: end-to-end Windows provisioning and Arch
+  libfprint/fprintd installation.
 - `patches/`: eventual patches against a pinned upstream libfprint commit.
 - `packaging/arch/PKGBUILD`: reversible Arch package for fprintd integration;
   it replaces `libfprint-git` only when explicitly installed with pacman.
@@ -106,3 +114,15 @@ meson setup build
 meson compile -C build
 ./build/syna0082-info
 ```
+
+For a complete installation, including local provisioning of the two required
+private records, follow [docs/install.md](docs/install.md). Proprietary driver
+payloads, device calibration, captures, and biometric data are intentionally
+not distributed by this repository.
+
+## License
+
+Original project code and the libfprint patch series are licensed under
+LGPL-2.1-or-later. Third-party work retains its original attribution and
+license; see `docs/references.md`. Synaptics/PQI binaries and extracted records
+are not part of this project or its license.

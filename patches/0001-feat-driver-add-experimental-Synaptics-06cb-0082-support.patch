@@ -1,14 +1,14 @@
-From 190862fa1471c7d05783008203f5a2fc07e36f0e Mon Sep 17 00:00:00 2001
+From 82b39b08013ec2326de616bc7c6ec6649df3ca5c Mon Sep 17 00:00:00 2001
 From: Alperen Elhan <alperen@elhan.org>
 Date: Tue, 4 Aug 2026 18:20:37 +0300
 Subject: [PATCH] feat(driver): add experimental Synaptics 06cb:0082 support
 
 ---
  data/autosuspend.hwdb        |   5 +
- libfprint/drivers/syna0082.c | 494 +++++++++++++++++++++++++++++++++++
+ libfprint/drivers/syna0082.c | 598 +++++++++++++++++++++++++++++++++++
  libfprint/meson.build        |   1 +
  meson.build                  |   1 +
- 4 files changed, 501 insertions(+)
+ 4 files changed, 605 insertions(+)
  create mode 100644 libfprint/drivers/syna0082.c
 
 diff --git a/data/autosuspend.hwdb b/data/autosuspend.hwdb
@@ -29,10 +29,10 @@ index 5482fc9..172b62f 100644
  usb:v06CBp00C2*
 diff --git a/libfprint/drivers/syna0082.c b/libfprint/drivers/syna0082.c
 new file mode 100644
-index 0000000..40f40bd
+index 0000000..0fb9341
 --- /dev/null
 +++ b/libfprint/drivers/syna0082.c
-@@ -0,0 +1,494 @@
+@@ -0,0 +1,598 @@
 +/*
 + * Experimental Synaptics/PQI 06cb:0082 image driver.
 + *
@@ -69,6 +69,8 @@ index 0000000..40f40bd
 +  guint8        *config_06;
 +  guint8        *scan_02;
 +  gsize          init_stage;
++  gsize          rearm_stage;
++  guint          capture_count;
 +  gboolean       deactivating;
 +};
 +
@@ -194,6 +196,7 @@ index 0000000..40f40bd
 +          transfer->buffer + IMAGE_HEADER_LENGTH,
 +          width * height);
 +  image->flags |= FPI_IMAGE_PARTIAL;
++  self->capture_count++;
 +  fpi_image_device_image_captured (FP_IMAGE_DEVICE (self), image);
 +  fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), FALSE);
 +}
@@ -305,7 +308,6 @@ index 0000000..40f40bd
 +  if (self->init_stage == 7)
 +    {
 +      fpi_image_device_activate_complete (FP_IMAGE_DEVICE (self), NULL);
-+      start_interrupt (self);
 +    }
 +  else
 +    init_send_stage (self);
@@ -425,6 +427,7 @@ index 0000000..40f40bd
 +
 +  self->deactivating = FALSE;
 +  self->init_stage = 0;
++  self->capture_count = 0;
 +  transfer = fpi_usb_transfer_new (FP_DEVICE (self));
 +  fpi_usb_transfer_fill_control (transfer,
 +                                 G_USB_DEVICE_DIRECTION_DEVICE_TO_HOST,
@@ -440,6 +443,106 @@ index 0000000..40f40bd
 +                           fpi_device_get_cancellable (FP_DEVICE (self)),
 +                           operation_control_cb,
 +                           NULL);
++}
++
++static void rearm_send_stage (FpiDeviceSyna0082 *self);
++
++static void
++rearm_read_cb (FpiUsbTransfer *transfer,
++               FpDevice       *device,
++               gpointer        user_data,
++               GError         *error)
++{
++  FpiDeviceSyna0082 *self = FPI_DEVICE_SYNA0082 (device);
++
++  if (error)
++    {
++      fail_session_or_deactivate (self, error);
++      return;
++    }
++  self->rearm_stage++;
++  if (self->rearm_stage == 2)
++    start_interrupt (self);
++  else
++    rearm_send_stage (self);
++}
++
++static void
++rearm_write_cb (FpiUsbTransfer *transfer,
++                FpDevice       *device,
++                gpointer        user_data,
++                GError         *error)
++{
++  FpiDeviceSyna0082 *self = FPI_DEVICE_SYNA0082 (device);
++  FpiUsbTransfer *read_transfer;
++  gsize response_length;
++
++  if (error)
++    {
++      fail_session_or_deactivate (self, error);
++      return;
++    }
++  response_length = self->rearm_stage == 0 ? 2 : SCAN_RESPONSE_LENGTH;
++  read_transfer = fpi_usb_transfer_new (device);
++  fpi_usb_transfer_fill_bulk (read_transfer, EP_IN, response_length);
++  read_transfer->short_is_error = TRUE;
++  fpi_usb_transfer_submit (read_transfer,
++                           USB_TIMEOUT,
++                           fpi_device_get_cancellable (device),
++                           rearm_read_cb,
++                           NULL);
++}
++
++static void
++rearm_send_stage (FpiDeviceSyna0082 *self)
++{
++  FpDevice *device = FP_DEVICE (self);
++  FpiUsbTransfer *transfer;
++  guint8 *request;
++  gsize request_length;
++
++  if (self->rearm_stage == 0)
++    {
++      request = self->config_39;
++      request_length = CONFIG_39_LENGTH;
++    }
++  else
++    {
++      /* Windows uses 0x23 for subsequent enrollment acquisitions. */
++      self->scan_02[1749] = 0x23;
++      request = self->scan_02;
++      request_length = SCAN_02_LENGTH;
++    }
++
++  transfer = fpi_usb_transfer_new (device);
++  fpi_usb_transfer_fill_bulk_full (transfer,
++                                   EP_OUT,
++                                   request,
++                                   request_length,
++                                   NULL);
++  transfer->short_is_error = TRUE;
++  fpi_usb_transfer_submit (transfer,
++                           USB_TIMEOUT,
++                           fpi_device_get_cancellable (device),
++                           rearm_write_cb,
++                           NULL);
++}
++
++static void
++dev_change_state (FpImageDevice      *image_device,
++                  FpiImageDeviceState state)
++{
++  FpiDeviceSyna0082 *self = FPI_DEVICE_SYNA0082 (image_device);
++
++  if (state != FPI_IMAGE_DEVICE_STATE_AWAIT_FINGER_ON)
++    return;
++  if (self->capture_count == 0)
++    start_interrupt (self);
++  else
++    {
++      self->rearm_stage = 0;
++      rearm_send_stage (self);
++    }
 +}
 +
 +static void
@@ -522,6 +625,7 @@ index 0000000..40f40bd
 +  image_class->img_open = dev_open;
 +  image_class->img_close = dev_close;
 +  image_class->activate = dev_activate;
++  image_class->change_state = dev_change_state;
 +  image_class->deactivate = dev_deactivate;
 +  image_class->bz3_threshold = 20;
 +  image_class->img_width = IMAGE_WIDTH;

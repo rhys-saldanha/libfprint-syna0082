@@ -1,5 +1,5 @@
 pkgname=libfprint-syna0082-git
-pkgver=1.94.100.r0.g92f1a52
+pkgver=1.94.100.r4.gpatched
 pkgrel=1
 pkgdesc='libfprint development build with experimental Synaptics/PQI 06cb:0082 support'
 arch=(x86_64)
@@ -11,12 +11,16 @@ makedepends=(git glib2-devel gobject-introspection meson python-cairo python-gob
 checkdepends=(cairo umockdev)
 provides=(libfprint 'libfprint-2.so=2-64')
 conflicts=(libfprint libfprint-git)
-source=('libfprint::git+file:///home/alperen/src/libfprint-06cb0082')
+_source_dir=${SYNA0082_LIBFPRINT_SOURCE:?Set SYNA0082_LIBFPRINT_SOURCE to the prepared libfprint clone}
+source=("libfprint::git+file://${_source_dir}")
 sha256sums=(SKIP)
 
 pkgver() {
   cd libfprint
-  printf '1.94.100.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  base=c4654fdc85c25afdd9115bec2f95a44145ae3b94
+  printf '1.94.100.r%s.g%s' \
+    "$(git rev-list --count "$base..HEAD")" \
+    "$(git rev-parse --short HEAD)"
 }
 
 build() {

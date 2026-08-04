@@ -1,20 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
-if [[ ${EUID} -ne 0 ]]; then
-  echo "Run this helper through pkexec." >&2
-  exit 1
-fi
-
-pacman -S --needed --noconfirm \
-  meson \
-  ninja \
-  wireshark-cli \
-  glib2-devel \
-  gobject-introspection \
-  python-cairo \
-  python-gobject \
-  python-numpy \
-  opencv \
-  umockdev \
-  gtk-doc
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$script_dir/setup-arch-root" "$@"

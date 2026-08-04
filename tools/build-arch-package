@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+repo=${SYNA0082_REPO:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}
+source_dir=${SYNA0082_LIBFPRINT_SOURCE:-"${HOME}/src/libfprint-syna0082"}
+cache_root=${XDG_CACHE_HOME:-"${HOME}/.cache"}
+package_dir=${SYNA0082_PACKAGE_DIR:-"${cache_root}/syna0082/package-build"}
+
+if [ ! -d "$source_dir/.git" ]; then
+  echo "Prepared libfprint source does not exist: $source_dir" >&2
+  echo "Run tools/prepare-libfprint-source first." >&2
+  exit 2
+fi
+
+mkdir -p "$package_dir"
+cp "$repo/packaging/arch/PKGBUILD" "$package_dir/PKGBUILD"
+export SYNA0082_LIBFPRINT_SOURCE=$source_dir
+cd "$package_dir"
+makepkg --cleanbuild --clean --syncdeps --noconfirm
+
+printf 'Packages written under %s:\n' "$package_dir"
+find "$package_dir" -maxdepth 1 -type f -name 'libfprint-syna0082-git-*.pkg.tar.*' -print

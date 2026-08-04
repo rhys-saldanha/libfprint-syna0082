@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+repo=${SYNA0082_REPO:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}
+target=${1:-"${HOME}/src/libfprint-syna0082"}
+upstream=https://gitlab.freedesktop.org/libfprint/libfprint.git
+base=$(tr -d '\r\n' < "$repo/patches/UPSTREAM_COMMIT")
+
+if [ -e "$target" ]; then
+  echo "Refusing to replace existing source path: $target" >&2
+  exit 2
+fi
+
+mkdir -p "$(dirname -- "$target")"
+git clone "$upstream" "$target"
+git -C "$target" checkout --detach "$base"
+git -C "$target" \
+  -c user.name='libfprint-syna0082 patch installer' \
+  -c user.email='noreply@localhost' \
+  am "$repo"/patches/0*.patch
+
+count=$(git -C "$target" rev-list --count "$base..HEAD")
+if [ "$count" -ne 4 ]; then
+  echo "Expected 4 driver patches above $base, found $count" >&2
+  exit 2
+fi
+
+printf 'Prepared libfprint source at %s\n' "$target"
+git -C "$target" log --oneline --decorate -6

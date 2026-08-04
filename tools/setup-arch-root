@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ ${EUID} -ne 0 ]]; then
+  echo "Run this helper through sudo or pkexec." >&2
+  exit 1
+fi
+
+pacman -S --needed --noconfirm \
+  base-devel \
+  fprintd \
+  git \
+  meson \
+  ninja \
+  wireshark-cli \
+  glib2-devel \
+  gobject-introspection \
+  python-cairo \
+  python-gobject \
+  python-numpy \
+  opencv \
+  umockdev \
+  gtk-doc \
+  usbutils

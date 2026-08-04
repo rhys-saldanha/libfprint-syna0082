@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ ${EUID} -ne 0 ]]; then
+  echo "Run this helper through sudo or pkexec." >&2
+  exit 1
+fi
+
+package=${1:?usage: install-arch-fprintd-root PACKAGE PRIVATE_RECORD_DIRECTORY}
+record_source=${2:?usage: install-arch-fprintd-root PACKAGE PRIVATE_RECORD_DIRECTORY}
+record_target=/var/lib/libfprint/syna0082
+
+for name in config-06.bin scan-matrix-02.bin; do
+  if [[ ! -f "$record_source/$name" ]]; then
+    echo "Missing required private record: $record_source/$name" >&2
+    exit 1
+  fi
+done
+
+validate_record () {
+  name=$1
+  expected_size=$2
+  expected_prefix=$3
+  path=$record_source/$name
+  size=$(stat -c %s "$path")
+  prefix=$(od -An -tx1 -N5 "$path" | tr -d ' \n')
+  if [[ $size -ne $expected_size || $prefix != "$expected_prefix" ]]; then
+    echo "Invalid private record layout: $path" >&2
+    exit 1
+  fi
+}
+
+validate_record config-06.bin 10501 0602000001
+validate_record scan-matrix-02.bin 18869 0298000000
+matrix_mode=$(od -An -tu1 -j1749 -N1 "$record_source/scan-matrix-02.bin" | tr -d ' \n')
+if [[ $matrix_mode != 2 ]]; then
+  echo "scan-matrix-02.bin is not the acquisition-mode record" >&2
+  exit 1
+fi
+
+# Keep this interactive: the first installation may need explicit approval to
+# replace an existing libfprint or libfprint-git package.
+pacman -U "$package"
+
+install -d -o root -g root -m 0700 "$record_target"
+for name in config-06.bin scan-matrix-02.bin; do
+  install -o root -g root -m 0600 "$record_source/$name" "$record_target/$name"
+done
+
+systemctl try-restart fprintd.service

@@ -17,3 +17,6 @@ work/
 *.cat
 *.bin
 *.img
+*.pgm
+*.npz
+*.fp3
