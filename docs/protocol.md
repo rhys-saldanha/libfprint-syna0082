@@ -62,6 +62,33 @@ message, with device-to-host transfers commonly sized 8,082 and 2,154 bytes.
 Endpoint `0x83` produces paired interrupt submissions/completions, with a
 five-byte payload when a finger-state event is delivered.
 
+### Raw image response
+
+The 8,082-byte endpoint 0x81 response to 51 00 20 00 00 contains an 18-byte
+header followed by an unencrypted 8-bit grayscale image:
+
+    00 00             status
+    8c 1f 00 00       bytes following this field (8,076)
+    38 00             width (56)
+    90 00             height (144)
+    4d 01 08 00
+    00 00 00 00       metadata/flags, not fully decoded
+    ...               56 * 144 raw pixels
+
+All fourteen enrollment samples and the normal verification samples have the
+same dimensions and header. Pixel ranges span nearly the full 0-255 range and
+the pixel hashes differ between acquisitions. One verification response ends
+its header in 20 80 and has only a 116-141 pixel range; it is likely an empty,
+invalid, or intermediate frame and must not yet be treated as a usable
+fingerprint image.
+
+No TLS record headers are present in the Windows captures. This device/driver
+mode therefore appears to expose raw host-match image data without the
+modified TLS transport used by the older Validity90 prototype. The
+10,501-byte 0x06 payload is identical across the three operation captures,
+while the 18,869-byte 0x02 payload has operation-dependent variants. Their
+roles remain unknown.
+
 ## Verification outcomes
 
 The successful lock-screen capture has one acquisition followed by short

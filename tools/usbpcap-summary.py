@@ -56,7 +56,9 @@ def main() -> int:
         "-T",
         "fields",
         "-E",
-        "separator=\\t",
+        # TShark uses /t (not the two-character string \\t) to request a tab
+        # separator. Using \\t makes Python's TSV parser see one giant field.
+        "separator=/t",
         "-E",
         "quote=d",
         "-E",
