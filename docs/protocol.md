@@ -270,6 +270,12 @@ values `b1187f0f50813f86727cb7030232891410b204413ecf33c139a3e818d1768913`,
 `ab9e37e8e58f4adc4ea0b8dfc3ef7755c41c254b4b693266eb65f80813a14113`,
 and `9135ec2baaf883509a4cc5dbcd99038817be6b4811b650bc4bd3465262cb8abb`.
 
+After the transplant matrix, a USB reset followed by an unmodified control
+run returned `00 00` for descriptor 39 and the normal 2,154-byte `0x02`
+response. The control stopped before waiting for a finger or sending `0x51`.
+This confirms both recovery and that the transplant outcomes were not caused
+by a stale rejected-config state.
+
 ## Verification outcomes
 
 The successful lock-screen capture has one acquisition followed by short

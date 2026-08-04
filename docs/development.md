@@ -122,6 +122,11 @@ region. The boundary-test runner exposes these as `prefix-transplant`,
 exact length before a partial transplant; experiment flags remain mutually
 exclusive.
 
+`--stop-after-scan-matrix` exits successfully after the normal 2,154-byte
+`0x02` response, before waiting for a finger or sending acquisition command
+`0x51`. It is intended for post-experiment recovery controls and still requires
+the general device-state acknowledgement.
+
 After a physical power cycle, the paired control run restored `0x06` while
 keeping the generated `0x39`. It received the normal 2,154-byte `0x02`
 response, observed the capture-ready event, and acquired a valid 56x144 frame.

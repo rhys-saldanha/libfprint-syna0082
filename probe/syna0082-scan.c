@@ -31,6 +31,7 @@ typedef struct
 {
   const char *blob_dir;
   const char *output;
+  bool stop_after_scan_matrix;
   bool omit_config_06;
   bool flip_config_06_last_bit;
   bool flip_config_06_header_bit;
@@ -62,6 +63,8 @@ parse_options (int argc, char **argv, Options *options)
         options->blob_dir = argv[++i];
       else if (strcmp (argv[i], "--output") == 0 && i + 1 < argc)
         options->output = argv[++i];
+      else if (strcmp (argv[i], "--stop-after-scan-matrix") == 0)
+        options->stop_after_scan_matrix = true;
       else if (strcmp (argv[i],
                        "--i-understand-device-state-will-change") == 0)
         acknowledged = true;
@@ -494,6 +497,7 @@ main (int argc, char **argv)
                "[--experimental-transplant-config-06-prefix] "
                "[--experimental-transplant-config-06-body] "
                "[--experimental-use-alternate-config-06] "
+               "[--stop-after-scan-matrix] "
                "--i-understand-device-state-will-change\n",
                argv[0]);
       return 2;
@@ -664,8 +668,14 @@ main (int argc, char **argv)
                  sizeof (scan_02),
                  response,
                  SYNA0082_SCAN_RESPONSE_LENGTH,
-                 "scan-matrix-02") ||
-      !wait_for_capture_event (handle))
+                 "scan-matrix-02"))
+    goto out;
+  if (options.stop_after_scan_matrix)
+    {
+      exit_code = 0;
+      goto out;
+    }
+  if (!wait_for_capture_event (handle))
     goto out;
 
   if (!capture_image (context,
