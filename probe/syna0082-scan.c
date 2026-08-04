@@ -239,7 +239,10 @@ exchange (libusb_device_handle *handle,
   if (!bulk_write (handle, request, request_length, name) ||
       !bulk_read_exact (handle, response, response_length, name))
     return false;
-  printf ("stage=%s response_length=%zu\n", name, response_length);
+  printf ("stage=%s response_length=%zu", name, response_length);
+  if (response_length == 2)
+    printf (" status=%02x%02x", response[0], response[1]);
+  putchar ('\n');
   fflush (stdout);
   return true;
 }
