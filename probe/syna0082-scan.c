@@ -31,6 +31,7 @@ typedef struct
 {
   const char *blob_dir;
   const char *output;
+  bool omit_config_06;
 } Options;
 
 typedef struct
@@ -55,6 +56,8 @@ parse_options (int argc, char **argv, Options *options)
       else if (strcmp (argv[i],
                        "--i-understand-device-state-will-change") == 0)
         acknowledged = true;
+      else if (strcmp (argv[i], "--experimental-omit-config-06") == 0)
+        options->omit_config_06 = true;
       else
         return false;
     }
@@ -430,16 +433,18 @@ main (int argc, char **argv)
     {
       fprintf (stderr,
                "usage: %s --blob-dir DIR --output IMAGE.pgm "
+               "[--experimental-omit-config-06] "
                "--i-understand-device-state-will-change\n",
                argv[0]);
       return 2;
     }
   syna0082_build_scan_config_v1 (config_39);
-  if (!load_blob (options.blob_dir,
-                  "config-06.bin",
-                  config_06,
-                  sizeof (config_06),
-                  0x06) ||
+  if ((!options.omit_config_06 &&
+       !load_blob (options.blob_dir,
+                   "config-06.bin",
+                   config_06,
+                   sizeof (config_06),
+                   0x06)) ||
       !load_blob (options.blob_dir,
                   "scan-matrix-02.bin",
                   scan_02,
@@ -510,13 +515,16 @@ main (int argc, char **argv)
                  response,
                  2,
                  "config-39") ||
-      !exchange (handle,
-                 config_06,
-                 sizeof (config_06),
-                 response,
-                 2,
-                 "config-06") ||
-      !exchange (handle,
+      (!options.omit_config_06 &&
+       !exchange (handle,
+                  config_06,
+                  sizeof (config_06),
+                  response,
+                  2,
+                  "config-06")))
+    goto out;
+
+  if (!exchange (handle,
                  scan_02,
                  sizeof (scan_02),
                  response,

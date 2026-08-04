@@ -80,6 +80,12 @@ build/syna0082-scan \
   --i-understand-device-state-will-change
 ```
 
+For the isolated `0x06` necessity experiment, the probe has an additional
+`--experimental-omit-config-06` gate. It skips only that exchange and still
+requires the general state-change acknowledgement. Do not run it unattended:
+record usbmon, use a fresh output path, and power-cycle the reader after the
+trial whether it succeeds or times out.
+
 On Saber, `tools/run-saber-captured-scan scan-linux-NN` records usbmon3 and the
 probe log alongside the PGM while refusing to overwrite any existing output.
 
