@@ -17,6 +17,8 @@ from syna0082_descriptor_catalog import DEFAULT_CATALOG_RVA, PEReader, parse_cat
 
 BLOCK_SIZE = 16
 HEADER_SIZE = 4
+PROTECTED_PREFIX_SIZE = 256
+PROTECTED_BODY_OFFSET = HEADER_SIZE + PROTECTED_PREFIX_SIZE
 SECURITY_KEY_RECORD_SIZE = 0x103
 SECURITY_KEY_SIZE = 0x100
 DEFAULT_SECURITY_KEY_CATALOG_RVAS = (0x13B3F0, 0x13C120)
@@ -94,11 +96,23 @@ def summarize_containers(payloads: list[bytes]) -> dict[str, object]:
     repeated_values = sum(1 for count in counts.values() if count > 1)
     repeated_occurrences = sum(count for count in counts.values() if count > 1)
     runs = maximal_repeated_runs(payloads)
+    protected_body_blocks = sum(
+        (len(payload) - PROTECTED_BODY_OFFSET) // BLOCK_SIZE
+        for payload in payloads
+    )
     return {
         "payload_count": len(payloads),
         "headers": dict(sorted(Counter(payload[:HEADER_SIZE].hex() for payload in payloads).items())),
         "body_block_size": BLOCK_SIZE,
+        "observed_layout": {
+            "header_offset": 0,
+            "header_size": HEADER_SIZE,
+            "protected_prefix_offset": HEADER_SIZE,
+            "protected_prefix_size": PROTECTED_PREFIX_SIZE,
+            "protected_body_offset": PROTECTED_BODY_OFFSET,
+        },
         "body_block_count": len(body_blocks),
+        "post_prefix_body_block_count": protected_body_blocks,
         "unique_body_block_count": len(counts),
         "repeated_body_block_value_count": repeated_values,
         "repeated_body_block_occurrence_count": repeated_occurrences,

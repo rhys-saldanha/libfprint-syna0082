@@ -35,6 +35,8 @@ typedef struct
   bool flip_config_06_last_bit;
   bool flip_config_06_header_bit;
   bool flip_config_06_envelope_bit;
+  bool flip_config_06_envelope_middle_bit;
+  bool flip_config_06_envelope_last_bit;
   bool flip_config_06_body_bit;
 } Options;
 
@@ -72,6 +74,12 @@ parse_options (int argc, char **argv, Options *options)
                        "--experimental-flip-config-06-envelope-bit") == 0)
         options->flip_config_06_envelope_bit = true;
       else if (strcmp (argv[i],
+                       "--experimental-flip-config-06-envelope-middle-bit") == 0)
+        options->flip_config_06_envelope_middle_bit = true;
+      else if (strcmp (argv[i],
+                       "--experimental-flip-config-06-envelope-last-bit") == 0)
+        options->flip_config_06_envelope_last_bit = true;
+      else if (strcmp (argv[i],
                        "--experimental-flip-config-06-body-bit") == 0)
         options->flip_config_06_body_bit = true;
       else
@@ -82,6 +90,8 @@ parse_options (int argc, char **argv, Options *options)
                              options->flip_config_06_last_bit +
                              options->flip_config_06_header_bit +
                              options->flip_config_06_envelope_bit +
+                             options->flip_config_06_envelope_middle_bit +
+                             options->flip_config_06_envelope_last_bit +
                              options->flip_config_06_body_bit;
   return acknowledged && options->blob_dir != NULL && options->output != NULL &&
          experiments <= 1;
@@ -459,6 +469,8 @@ main (int argc, char **argv)
                "[--experimental-flip-config-06-last-bit] "
                "[--experimental-flip-config-06-header-bit] "
                "[--experimental-flip-config-06-envelope-bit] "
+               "[--experimental-flip-config-06-envelope-middle-bit] "
+               "[--experimental-flip-config-06-envelope-last-bit] "
                "[--experimental-flip-config-06-body-bit] "
                "--i-understand-device-state-will-change\n",
                argv[0]);
@@ -495,6 +507,18 @@ main (int argc, char **argv)
       config_06[5] ^= 0x01;
       fputs ("experiment=flip-config-06-envelope-bit message-offset=5 "
              "payload-offset=4 mask=01\n", stderr);
+    }
+  else if (options.flip_config_06_envelope_middle_bit)
+    {
+      config_06[133] ^= 0x01;
+      fputs ("experiment=flip-config-06-envelope-middle-bit "
+             "message-offset=133 payload-offset=132 mask=01\n", stderr);
+    }
+  else if (options.flip_config_06_envelope_last_bit)
+    {
+      config_06[260] ^= 0x01;
+      fputs ("experiment=flip-config-06-envelope-last-bit "
+             "message-offset=260 payload-offset=259 mask=01\n", stderr);
     }
   else if (options.flip_config_06_body_bit)
     {

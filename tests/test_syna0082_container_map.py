@@ -27,15 +27,17 @@ class FakeReader:
 class ContainerMapTests(unittest.TestCase):
     def test_reports_maximal_cross_descriptor_run(self):
         shared = bytes(range(32))
+        prefix = b"P" * container_map.PROTECTED_PREFIX_SIZE
         payloads = [
-            b"\x02\x00\x00\x01" + b"A" * 16 + shared + b"B" * 16,
-            b"\x02\x00\x00\x01" + b"C" * 16 + shared + b"D" * 16,
+            b"\x02\x00\x00\x01" + prefix + b"A" * 16 + shared + b"B" * 16,
+            b"\x02\x00\x00\x01" + prefix + b"C" * 16 + shared + b"D" * 16,
         ]
         result = container_map.summarize_containers(payloads)
         self.assertEqual(result["headers"], {"02000001": 2})
-        self.assertEqual(len(result["cross_descriptor_runs_at_least_two_blocks"]), 1)
-        run = result["cross_descriptor_runs_at_least_two_blocks"][0]
-        self.assertEqual(run["payload_offset"], 20)
+        self.assertEqual(result["observed_layout"]["protected_body_offset"], 260)
+        self.assertEqual(result["post_prefix_body_block_count"], 8)
+        run = result["cross_descriptor_runs_at_least_two_blocks"][-1]
+        self.assertEqual(run["payload_offset"], 276)
         self.assertEqual(run["length"], 32)
         self.assertEqual(run["sha256"], hashlib.sha256(shared).hexdigest())
 

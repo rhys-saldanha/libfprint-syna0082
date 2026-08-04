@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 || ! $1 =~ ^(header|envelope|body)$ || ! $2 =~ ^[0-9][0-9]$ ]]; then
-  echo "usage: $0 {header|envelope|body} NN" >&2
+if [[ $# -ne 2 || ! $1 =~ ^(header|envelope|envelope-middle|envelope-last|body)$ || ! $2 =~ ^[0-9][0-9]$ ]]; then
+  echo "usage: $0 {header|envelope|envelope-middle|envelope-last|body} NN" >&2
   exit 2
 fi
 

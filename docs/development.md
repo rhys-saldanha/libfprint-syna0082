@@ -102,12 +102,15 @@ Power-cycle the reader after running it.
 
 The boundary probe adds three mutually exclusive flags:
 `--experimental-flip-config-06-header-bit`,
-`--experimental-flip-config-06-envelope-bit`, and
+`--experimental-flip-config-06-envelope-bit`,
+`--experimental-flip-config-06-envelope-middle-bit`,
+`--experimental-flip-config-06-envelope-last-bit`, and
 `--experimental-flip-config-06-body-bit`. They change complete-message offsets
-4, 5, and 261 respectively. `tools/run-saber-config06-boundary-test` accepts
-`header`, `envelope`, or `body`, records usbmon, and refuses to overwrite prior
-evidence. All experimental mutation flags and omission are mutually exclusive.
-Power-cycle the reader between trials.
+4, 5, 133, 260, and 261 respectively.
+`tools/run-saber-config06-boundary-test` accepts `header`, `envelope`,
+`envelope-middle`, `envelope-last`, or `body`, records usbmon, and refuses to
+overwrite prior evidence. All experimental mutation flags and omission are
+mutually exclusive. Power-cycle the reader between trials.
 
 After a physical power cycle, the paired control run restored `0x06` while
 keeping the generated `0x39`. It received the normal 2,154-byte `0x02`

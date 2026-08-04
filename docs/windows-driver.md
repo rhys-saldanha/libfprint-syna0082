@@ -103,6 +103,14 @@ prove that offset 260 is a universal field boundary, nor does it identify a
 cipher, IV, MAC, signature, or plaintext instruction encoding. In particular,
 the selected PQI descriptor 39 does not participate in the repeated run.
 
+Device-oracle trials subsequently established the offset rather than merely
+inferring it. Single-bit changes at payload offsets 4, 132, and 259 all return
+`be 04`, while changes at offsets 260 and 10,499 return `4f 04`. Thus the
+outer layout is a four-byte header, a 256-byte protected prefix at `[4, 260)`,
+and a block-protected body at `[260, length)`. All 75 post-prefix body lengths
+remain divisible by 16. The selected PQI payload has a 10,240-byte post-prefix
+body. The fixed prefix has RSA-2048 size, but its semantics remain unresolved.
+
 ## Sensor-security public keys
 
 The `scsSSPubKey.c` lookup is separate from the sensor-config catalog. It has
