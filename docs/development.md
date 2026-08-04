@@ -91,6 +91,12 @@ status `44 04` from `0x02` rather than its 2,154-byte response. Therefore the
 driver must retain `0x06` until that static record has an independent open
 representation.
 
+After a physical power cycle, the paired control run restored `0x06` while
+keeping the generated `0x39`. It received the normal 2,154-byte `0x02`
+response, observed the capture-ready event, and acquired a valid 56x144 frame.
+The image spans values 0 through 255 with 254 unique values. This rules out a
+stale post-experiment device state as the cause of `44 04`.
+
 On Saber, `tools/run-saber-captured-scan scan-linux-NN` records usbmon3 and the
 probe log alongside the PGM while refusing to overwrite any existing output.
 

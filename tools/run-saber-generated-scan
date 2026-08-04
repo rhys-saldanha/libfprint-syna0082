@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 || ! $1 =~ ^generated-scan-[0-9][0-9]$ ]]; then
+  echo "usage: $0 generated-scan-NN" >&2
+  exit 2
+fi
+
+lab=/home/alperen/fingerprint-lab
+stem=$lab/$1
+probe=/tmp/syna0082-c-test/syna0082-scan
+blobs=$lab/device-data-06cb0082
+
+for suffix in pcapng dumpcap.log probe.log pgm; do
+  if [[ -e $stem.$suffix ]]; then
+    echo "Refusing to overwrite $stem.$suffix" >&2
+    exit 2
+  fi
+done
+
+sg wireshark -c "/usr/bin/dumpcap -q -i usbmon3 -a duration:60 -w '$stem.pcapng'" \
+  >"$stem.dumpcap.log" 2>&1 &
+capture_pid=$!
+
+stop_capture() {
+  kill -INT "$capture_pid" 2>/dev/null || true
+  wait "$capture_pid" 2>/dev/null || true
+}
+trap stop_capture EXIT
+
+sleep 1
+set +e
+timeout 45 "$probe" \
+  --blob-dir "$blobs" \
+  --output "$stem.pgm" \
+  --i-understand-device-state-will-change \
+  2>&1 | tee "$stem.probe.log"
+probe_status=${PIPESTATUS[0]}
+set -e
+
+stop_capture
+trap - EXIT
+exit "$probe_status"
