@@ -17,10 +17,15 @@ for name in config-06.bin scan-matrix-02.bin; do
   fi
 done
 
+# Keep this interactive: a first installation may need explicit approval to
+# replace an existing libfprint or libfprint-git package.  Running pacman with
+# --noconfirm answers that conflict prompt with its safe default and leaves a
+# misleading half-installed blob directory behind.
+pacman -U "$package"
+
 install -d -o root -g root -m 0700 "$blob_target"
 for name in config-06.bin scan-matrix-02.bin; do
   install -o root -g root -m 0600 "$blob_source/$name" "$blob_target/$name"
 done
 
-pacman -U --noconfirm "$package"
 systemctl try-restart fprintd.service

@@ -72,6 +72,12 @@ repeated finger-on interrupt was also release-gated so one held touch cannot
 satisfy two enrollment stages. The complete upstream libfprint suite passes
 130/130 tests with the matcher enabled.
 
+The same positive/negative behavior was subsequently validated through the
+system fprintd service: a stored right-index print produced `verify-match`, and
+a right-middle probe produced `verify-no-match`. This confirms the complete
+device, libfprint serialization, fprintd storage, and reload path rather than
+only the standalone matcher.
+
 These thresholds are experimental. Five impostor fingers are not enough to
 estimate useful false-accept or false-reject rates, so the matcher must not yet be
 enabled for PAM, sudo, screen unlock, or other security decisions. The next

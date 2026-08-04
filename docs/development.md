@@ -169,3 +169,32 @@ running. An older `config-39.bin` is ignored and is not removed automatically.
 The operation replaces the installed `libfprint-git` package. Saber keeps its
 previous package in `/var/cache/pacman/pkg`, so rollback is available with
 `pacman -U` using that cached package. Do not place the device blobs in Git.
+
+The installer deliberately leaves `pacman -U` interactive. On the first
+installation, approve replacement of the conflicting `libfprint-git` package;
+using `--noconfirm` rejects that prompt and does not install the driver. Blob
+installation happens only after the package transaction succeeds.
+
+## Live fprintd validation
+
+On 2026-08-04, package `libfprint-syna0082-git
+1.94.100.r5.g9493bf4-1` was installed on Saber with `config-06.bin` and
+`scan-matrix-02.bin` stored under `/var/lib/libfprint/syna0082` as root-owned
+mode-0600 files. After restarting fprintd, its manager exposed both devices:
+
+- `/Device/0`: the laptop's built-in Goodix MOC sensor;
+- `/Device/1`: `Synaptics/PQI 06cb:0082`, selected as the default device.
+
+A right-index enrollment was stored by fprintd. A subsequent right-index
+probe returned `verify-match (done)`, while a right-middle probe against the
+same enrollment returned `verify-no-match (done)`. The stored FP3 gallery was
+also checked with `tools/syna0082-fp3-summary.py`: all five feature records had
+the expected magic, declared count, and exact encoded length. The template and
+its debug copy remain outside Git.
+
+The initially installed package was stale at commit `92f1a52`; verification
+reported a generic invalid-feature error. Rebuilding from the current driver
+head (`9493bf4`, which also includes generated `0x39` configuration) removed
+that failure. Matcher decoding now reports whether a malformed reference or
+probe failed its header, count, length, point, or descriptor validation,
+without logging biometric bytes.

@@ -54,6 +54,8 @@ contains partial USB experiments, not a working driver.
   decrypted calibration to scan matrix without dumping either artifact.
 - `tools/syna0082-image-summary.py`: validate raw image records and optionally
   extract them outside any Git worktree.
+- `tools/syna0082-fp3-summary.py`: validate stored libfprint FP3 gallery
+  structure without printing feature descriptors or biometric payloads.
 - `tools/syna0082_matcher.py`: independent descriptor-gallery matcher for the
   reader's unusually small image area; see `docs/matcher.md` for safety gates.
 - `patches/libfprint/syna0082-matcher.cpp`: the same independent matcher
@@ -86,6 +88,11 @@ contains partial USB experiments, not a working driver.
 5. Implement scan/enroll/verify behavior and port it to modern libfprint.
 6. Validate through libfprint and fprintd, then prepare an upstream merge
    request.
+
+The experimental driver now completes enrollment and both positive and
+negative verification through fprintd on the test laptop. It is not yet
+enabled for PAM or screen unlock because the matcher thresholds still need a
+larger, disjoint validation set.
 
 The working upstream clone belongs outside this repository at
 `~/src/libfprint-06cb0082`. Its exact base commit will be recorded in
