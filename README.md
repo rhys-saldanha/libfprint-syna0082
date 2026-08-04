@@ -40,6 +40,8 @@ contains partial USB experiments, not a working driver.
 - `tools/usbpcap-summary.py`: normalize one USB device's capture to JSON Lines.
 - `tools/syna0082-image-summary.py`: validate raw image records and optionally
   extract them outside any Git worktree.
+- `tools/syna0082-extract-init.py`: extract device-specific initialization
+  blobs outside Git without replaying them.
 - `probe/syna0082-info.c`: descriptor-only Linux inventory; it never opens the
   device or sends transfers.
 - `docs/capture-matrix.md`: repeatable Windows traffic-capture procedure.

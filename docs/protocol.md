@@ -117,6 +117,12 @@ plaintext. No sampled chunk from the 10,501-byte 0x06 payload occurs there.
 This establishes that 0x02 is substantially assembled from calibration data,
 while 0x06 has a different source.
 
+The three captured 18,869-byte 0x02 variants differ at exactly one byte:
+offset 1,749. The value is 0x02 for initial acquisition setup, 0x23 during
+enrollment, and 0x13 during verification. All other 18,868 bytes are
+identical. This identifies the record as a device-specific scan matrix with a
+single operation-mode field, rather than an encrypted or per-scan payload.
+
 ## Verification outcomes
 
 The successful lock-screen capture has one acquisition followed by short
