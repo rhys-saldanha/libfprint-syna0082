@@ -42,3 +42,7 @@ Installed versions are `libfprint-git 1.94.10.r188.g6df065c-1.1` and
 Fingerprint Sensor`; it does not expose the external `06cb:0082` reader. This
 is the expected unsupported-device baseline and confirms that a new libfprint
 driver or device-ID implementation is required.
+
+The standalone C protocol parser validates the 18-byte image header, declared
+record length, dimensions, metadata, and pixel span without accessing USB.
+Its synthetic Meson test passes on Saber with warnings treated as errors.
