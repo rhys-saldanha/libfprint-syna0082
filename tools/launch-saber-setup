@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec /usr/bin/alacritty --hold -e \
+  /usr/bin/pkexec /tmp/setup-fingerprint-saber-root \
+  >/tmp/fingerprint-setup-launch.log 2>&1

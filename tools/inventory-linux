@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "COLLECTED_AT"
+date --utc --iso-8601=seconds
+
+echo "USB_DEVICE"
+lsusb -d 06cb:0082
+lsusb -d 06cb:0082 -v 2>/dev/null |
+  sed -n '/Device Descriptor:/,/^$/p'
+
+echo "FPRINT_PACKAGES"
+pacman -Q libfprint libfprint-git fprintd 2>/dev/null || true
+
+echo "FPRINT_DEVICES"
+busctl --system call net.reactivated.Fprint \
+  /net/reactivated/Fprint/Manager \
+  net.reactivated.Fprint.Manager GetDevices 2>/dev/null || true
+
+echo "FPRINT_LOG"
+journalctl -u fprintd --no-pager --lines=30 2>/dev/null || true
