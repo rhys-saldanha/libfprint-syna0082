@@ -33,6 +33,9 @@ typedef struct
   const char *output;
   bool omit_config_06;
   bool flip_config_06_last_bit;
+  bool flip_config_06_header_bit;
+  bool flip_config_06_envelope_bit;
+  bool flip_config_06_body_bit;
 } Options;
 
 typedef struct
@@ -62,12 +65,26 @@ parse_options (int argc, char **argv, Options *options)
       else if (strcmp (argv[i],
                        "--experimental-flip-config-06-last-bit") == 0)
         options->flip_config_06_last_bit = true;
+      else if (strcmp (argv[i],
+                       "--experimental-flip-config-06-header-bit") == 0)
+        options->flip_config_06_header_bit = true;
+      else if (strcmp (argv[i],
+                       "--experimental-flip-config-06-envelope-bit") == 0)
+        options->flip_config_06_envelope_bit = true;
+      else if (strcmp (argv[i],
+                       "--experimental-flip-config-06-body-bit") == 0)
+        options->flip_config_06_body_bit = true;
       else
         return false;
     }
 
+  unsigned int experiments = options->omit_config_06 +
+                             options->flip_config_06_last_bit +
+                             options->flip_config_06_header_bit +
+                             options->flip_config_06_envelope_bit +
+                             options->flip_config_06_body_bit;
   return acknowledged && options->blob_dir != NULL && options->output != NULL &&
-         !(options->omit_config_06 && options->flip_config_06_last_bit);
+         experiments <= 1;
 }
 
 static bool
@@ -440,6 +457,9 @@ main (int argc, char **argv)
                "usage: %s --blob-dir DIR --output IMAGE.pgm "
                "[--experimental-omit-config-06] "
                "[--experimental-flip-config-06-last-bit] "
+               "[--experimental-flip-config-06-header-bit] "
+               "[--experimental-flip-config-06-envelope-bit] "
+               "[--experimental-flip-config-06-body-bit] "
                "--i-understand-device-state-will-change\n",
                argv[0]);
       return 2;
@@ -463,6 +483,24 @@ main (int argc, char **argv)
       config_06[sizeof (config_06) - 1] ^= 0x01;
       fputs ("experiment=flip-config-06-last-bit offset=10500 mask=01\n",
              stderr);
+    }
+  else if (options.flip_config_06_header_bit)
+    {
+      config_06[4] ^= 0x01;
+      fputs ("experiment=flip-config-06-header-bit message-offset=4 "
+             "payload-offset=3 mask=01\n", stderr);
+    }
+  else if (options.flip_config_06_envelope_bit)
+    {
+      config_06[5] ^= 0x01;
+      fputs ("experiment=flip-config-06-envelope-bit message-offset=5 "
+             "payload-offset=4 mask=01\n", stderr);
+    }
+  else if (options.flip_config_06_body_bit)
+    {
+      config_06[261] ^= 0x01;
+      fputs ("experiment=flip-config-06-body-bit message-offset=261 "
+             "payload-offset=260 mask=01\n", stderr);
     }
 
   result = libusb_init (&context);

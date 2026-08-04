@@ -200,6 +200,35 @@ failure. The external evidence files are `flip-config06-last-bit-01`; the pcap
 SHA-256 is
 `a605c85d0a6a7b8f5f9bfbb5459de671185f10fb7d1472578f59dfe2d6fa35a5`.
 
+## `0x06` boundary experiments
+
+Three approved trials each flipped bit 0 at one predetermined offset in a
+freshly power-cycled reader. Every other request byte remained unchanged.
+
+| Complete-message offset | Payload offset | Region | `0x06` response |
+| ---: | ---: | --- | --- |
+| 4 | 3 | final byte of `02 00 00 01` header | `56 04` |
+| 5 | 4 | first byte after header | `be 04` |
+| 261 | 260 | first byte after 256-byte candidate prefix | `4f 04` |
+| 10,500 | 10,499 | final protected-body byte (earlier trial) | `4f 04` |
+
+Every rejected configuration left the prerequisite unavailable, so the
+unchanged `0x02` request subsequently returned `44 04`. The distinct `56 04`
+response proves that the four-byte header is parsed separately. The `be 04`
+response at payload offset 4, combined with the catalog's only shared block
+run beginning at payload offset 260, supports a candidate layout of a
+256-byte protected prefix followed by a block-protected body. One mutation at
+the prefix's first byte does not yet prove that all 256 bytes have the same
+role; middle and final-prefix probes are required before promoting that field
+boundary from inferred to observed.
+
+The external captures are `flip-config06-header-01`,
+`flip-config06-envelope-01`, and `flip-config06-body-01`. Their pcap SHA-256
+values are, respectively,
+`f8f7842161b274328ebb19ae4dd98c0b802ff3ab1c70becfcfe65b69d413a3a3`,
+`a7806aa8fb8b3298431e6e0757fa9c37f1758d520259c67898e40c3fcadc8a65`,
+and `83946fa97e0e0be3e595e2db0b46ac20e68a3804fc9db63ce07fdebe092b6403`.
+
 ## Verification outcomes
 
 The successful lock-screen capture has one acquisition followed by short
