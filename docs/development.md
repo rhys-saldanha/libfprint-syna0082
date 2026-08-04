@@ -56,6 +56,12 @@ The standalone C protocol parser validates the 18-byte image header, declared
 record length, dimensions, metadata, and pixel span without accessing USB.
 Its synthetic Meson test passes on Saber with warnings treated as errors.
 
+The guarded query probe also sends vendor read-only flash-information opcode
+`0x3e` after `0x01` and `0x19`. It accepts the command's variable response
+length, validates status and bounds, and prints only the fixed flash header and
+partition metadata. It never sends adjacent erase/write/signature commands
+`0x3f`, `0x41`, or `0x42`.
+
 ## Development USB access
 
 `udev/60-libfprint-06cb0082.rules` applies `uaccess` only to `06cb:0082`, so
@@ -126,6 +132,21 @@ exclusive.
 `0x02` response, before waiting for a finger or sending acquisition command
 `0x51`. It is intended for post-experiment recovery controls and still requires
 the general device-state acknowledgement.
+
+`--experimental-xor-config-06-body OFFSET MASK` mutates one explicitly named
+complete-message byte in the protected body only. `--stop-after-config-06`
+ends before `0x02`, allowing bounded validation-oracle experiments.
+`tools/run-saber-config06-oracle-matrix` validates the device/service state,
+records one usbmon series, resets before each mask, refuses evidence
+overwrite, and finishes with an unmodified `--stop-after-scan-matrix` health
+control. These are research gates, not production driver options.
+
+For reproducible static analysis, the Java scripts in `tools/` can be put on
+Ghidra's script path. `DumpNamedFunctions.java` decompiles explicit addresses;
+`DumpFunctionsBySourceString.java` locates functions referencing a matching
+embedded source-path string; `DumpCallerTree.java` follows callers to a bounded
+depth. Always direct output to `C:\fingerprint-lab\raw`, never into this
+repository.
 
 After a physical power cycle, the paired control run restored `0x06` while
 keeping the generated `0x39`. It received the normal 2,154-byte `0x02`

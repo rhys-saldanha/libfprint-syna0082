@@ -22,6 +22,7 @@ PROTECTED_BODY_OFFSET = HEADER_SIZE + PROTECTED_PREFIX_SIZE
 SECURITY_KEY_RECORD_SIZE = 0x103
 SECURITY_KEY_SIZE = 0x100
 DEFAULT_SECURITY_KEY_CATALOG_RVAS = (0x13B3F0, 0x13C120)
+COMMON_RSA_EXPONENTS = (3, 17, 65537)
 
 
 @dataclass(frozen=True)
@@ -131,6 +132,60 @@ def classify_security_key(key: bytes) -> tuple[str, str]:
     return "opaque_256_byte_integer", hashlib.sha256(key).hexdigest()
 
 
+def has_pkcs1_v1_5_type_1_padding(encoded: bytes) -> bool:
+    """Recognize a complete PKCS#1 v1.5 type-1 padded block."""
+    if len(encoded) < 12 or not encoded.startswith(b"\x00\x01"):
+        return False
+    separator = encoded.find(b"\x00", 2)
+    return (separator >= 10 and
+            encoded[2:separator] == b"\xff" * (separator - 2) and
+            separator + 1 < len(encoded))
+
+
+def rsa_prefix_check(payloads: list[bytes], keys: list[bytes]) -> dict[str, object]:
+    """Test protected prefixes against candidate RSA moduli without exposing bytes."""
+    prefixes = [payload[HEADER_SIZE:PROTECTED_BODY_OFFSET] for payload in payloads]
+    if any(len(prefix) != PROTECTED_PREFIX_SIZE for prefix in prefixes):
+        raise ValueError("all payloads must contain the complete protected prefix")
+    if any(len(key) != SECURITY_KEY_SIZE for key in keys):
+        raise ValueError("all candidate RSA moduli must be 256 bytes")
+
+    checks = 0
+    representatives_below_modulus = 0
+    matches = []
+    for descriptor, prefix in enumerate(prefixes):
+        for key_index, key in enumerate(keys):
+            for modulus_byte_order in ("big", "little"):
+                modulus = int.from_bytes(key, modulus_byte_order)
+                if modulus <= 1:
+                    continue
+                for signature_byte_order in ("big", "little"):
+                    signature = int.from_bytes(prefix, signature_byte_order)
+                    for exponent in COMMON_RSA_EXPONENTS:
+                        checks += 1
+                        if signature >= modulus:
+                            continue
+                        representatives_below_modulus += 1
+                        encoded = pow(signature, exponent, modulus).to_bytes(
+                            PROTECTED_PREFIX_SIZE, "big"
+                        )
+                        if has_pkcs1_v1_5_type_1_padding(encoded):
+                            matches.append({
+                                "descriptor": descriptor,
+                                "key_index": key_index,
+                                "exponent": exponent,
+                                "modulus_byte_order": modulus_byte_order,
+                                "signature_byte_order": signature_byte_order,
+                            })
+    return {
+        "candidate_key_count": len(keys),
+        "common_exponents": list(COMMON_RSA_EXPONENTS),
+        "interpretation_count": checks,
+        "representatives_below_modulus": representatives_below_modulus,
+        "strict_type_1_padding_matches": matches,
+    }
+
+
 def parse_security_key_catalog(reader: PEReader, catalog_rva: int,
                                maximum: int = 256) -> list[dict[str, object]]:
     records = []
@@ -152,6 +207,23 @@ def parse_security_key_catalog(reader: PEReader, catalog_rva: int,
     raise ValueError(f"security-key catalog at 0x{catalog_rva:x} is not terminated")
 
 
+def read_opaque_security_keys(reader: PEReader, catalog_rva: int,
+                              maximum: int = 256) -> list[bytes]:
+    """Read only opaque 256-byte values from a terminated security-key catalog."""
+    keys = []
+    for index in range(maximum):
+        record = reader.read_rva(
+            catalog_rva + index * SECURITY_KEY_RECORD_SIZE,
+            SECURITY_KEY_RECORD_SIZE,
+        )
+        if record[0] == 0:
+            return keys
+        key = record[3:]
+        if classify_security_key(key)[0] == "opaque_256_byte_integer":
+            keys.append(key)
+    raise ValueError(f"security-key catalog at 0x{catalog_rva:x} is not terminated")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=Path)
@@ -166,6 +238,11 @@ def main() -> int:
         payloads = [reader.read_rva(item.payload_rva, item.payload_length)
                     for item in descriptors]
         key_rvas = args.key_rvas or list(DEFAULT_SECURITY_KEY_CATALOG_RVAS)
+        opaque_keys = [
+            key
+            for rva in key_rvas
+            for key in read_opaque_security_keys(reader, rva)
+        ]
         result = {
             "binary_sha256": hashlib.sha256(reader.data).hexdigest(),
             "sensor_config_catalog_rva": f"0x{args.catalog_rva:x}",
@@ -177,6 +254,7 @@ def main() -> int:
                 }
                 for rva in key_rvas
             ],
+            "protected_prefix_rsa_check": rsa_prefix_check(payloads, opaque_keys),
         }
         print(json.dumps(result, indent=2))
     except (OSError, RuntimeError, ValueError, struct.error) as exc:

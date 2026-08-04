@@ -8,11 +8,13 @@ Run the offline, hash-only container map against an uncommitted reference DLL:
 python tools/syna0082_container_map.py C:\fingerprint-lab\windows-driver\synaWudfBioUsb52.dll
 ```
 
-It inventories the common header, aligned-block reuse, and the separate
-sensor-security public-key catalogs. The output contains hashes and structural
-metadata only. For an older DLL, override the sensor-config catalog RVA with
-`--catalog-rva`; security-key RVAs must likewise be supplied explicitly if
-they moved.
+It inventories the common header, aligned-block reuse, the separate
+sensor-security public-key catalogs, and tests whether protected prefixes form
+strict PKCS#1 v1.5 type-1 encodings under those opaque public values. Both
+prefix and modulus byte orders and common exponents 3, 17, and 65,537 are
+covered. The output contains hashes and structural metadata only. For an older
+DLL, override the sensor-config catalog RVA with `--catalog-rva`; security-key
+RVAs must likewise be supplied explicitly if they moved.
 
 `tools/syna0082_protocol.py` turns normalized USB JSON Lines into a stable,
 machine-readable protocol view. It never opens the USB device and never sends

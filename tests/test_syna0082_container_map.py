@@ -58,6 +58,22 @@ class ContainerMapTests(unittest.TestCase):
         self.assertEqual(records[0]["layout"], "opaque_256_byte_integer")
         self.assertNotIn("key", records[0])
 
+    def test_recognizes_only_complete_pkcs1_type_1_padding(self):
+        valid = b"\x00\x01" + b"\xff" * 8 + b"\x00digest-info"
+        self.assertTrue(container_map.has_pkcs1_v1_5_type_1_padding(valid))
+        self.assertFalse(container_map.has_pkcs1_v1_5_type_1_padding(
+            b"\x00\x01" + b"\xff" * 7 + b"\x00digest-info"
+        ))
+        self.assertFalse(container_map.has_pkcs1_v1_5_type_1_padding(
+            b"\x00\x01" + b"\xff" * 8 + b"digest-info"
+        ))
+
+    def test_rsa_prefix_check_reports_no_match_for_synthetic_values(self):
+        payload = (b"\x02\x00\x00\x01" + bytes(256) + b"B" * 16)
+        result = container_map.rsa_prefix_check([payload], [bytes([0xff]) * 256])
+        self.assertEqual(result["interpretation_count"], 12)
+        self.assertEqual(result["strict_type_1_padding_matches"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

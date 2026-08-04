@@ -45,6 +45,11 @@ contains partial USB experiments, not a working driver.
   I/O, firmware, and calibration capability inventory for the vendor DLL.
 - `tools/syna0082_descriptor_catalog.py`: hash-only inventory of the vendor
   sensor-configuration descriptor catalog; it never prints table bytes.
+- `tools/syna0082_container_map.py`: hash-only protected-container comparison,
+  public-key catalog inventory, and strict RSA-prefix hypothesis check.
+- `tools/DumpNamedFunctions.java`, `tools/DumpFunctionsBySourceString.java`,
+  and `tools/DumpCallerTree.java`: generic headless-Ghidra helpers; decompiler
+  output stays outside Git.
 - `tools/syna0082_calibration_map.py`: report byte-range provenance from
   decrypted calibration to scan matrix without dumping either artifact.
 - `tools/syna0082-image-summary.py`: validate raw image records and optionally
@@ -57,8 +62,8 @@ contains partial USB experiments, not a working driver.
   blobs outside Git without replaying them.
 - `probe/syna0082-info.c`: descriptor-only Linux inventory; it never opens the
   device or sends transfers.
-- `probe/syna0082-query.c`: guarded 0x01/0x19 information-query probe; build
-  it for review, but do not execute it without explicit approval.
+- `probe/syna0082-query.c`: guarded 0x01/0x19/0x3e information-query probe;
+  `0x3e` parses the read-only flash/partition inventory.
 - `probe/syna0082-scan.c`: guarded single-frame acquisition probe; its `0x39`
   message is generated from fields while two unresolved device records remain
   outside Git.

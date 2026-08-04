@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (( $# < 3 )) || [[ ! $1 =~ ^[0-9]+$ || ! $2 =~ ^[0-9][0-9]$ ]]; then
+  echo "usage: $0 MESSAGE_OFFSET NN MASK [MASK ...]" >&2
+  exit 2
+fi
+
+offset=$1
+sequence=$2
+shift 2
+if (( offset < 261 || offset > 10500 )); then
+  echo "message offset must be inside the protected body [261, 10500]" >&2
+  exit 2
+fi
+
+masks=()
+for value in "$@"; do
+  if [[ $value =~ ^0[xX]([0-9a-fA-F]+)$ ]]; then
+    parsed=$((16#${BASH_REMATCH[1]}))
+  elif [[ $value =~ ^[0-9]+$ ]]; then
+    parsed=$((10#$value))
+  else
+    echo "invalid XOR mask: $value" >&2
+    exit 2
+  fi
+  if (( parsed == 0 || parsed > 255 )); then
+    echo "invalid XOR mask: $value" >&2
+    exit 2
+  fi
+  masks+=("$parsed")
+done
+
+lab=/home/alperen/fingerprint-lab
+stem=$lab/oracle-config06-offset-${offset}-${sequence}
+probe=/tmp/syna0082-c-test/syna0082-scan
+blobs=$lab/device-data-06cb0082
+
+for suffix in pcapng dumpcap.log probe.log control.log; do
+  if [[ -e $stem.$suffix ]]; then
+    echo "Refusing to overwrite $stem.$suffix" >&2
+    exit 2
+  fi
+done
+if [[ $(systemctl is-active fprintd.service || true) == active ]]; then
+  echo "Refusing to race an active fprintd service" >&2
+  exit 2
+fi
+if [[ $(lsusb -d 06cb:0082 | wc -l) -ne 1 ]]; then
+  echo "Expected exactly one 06cb:0082 reader" >&2
+  exit 2
+fi
+
+sg wireshark -c "/usr/bin/dumpcap -q -i usbmon3 -a duration:180 -w '$stem.pcapng'" \
+  >"$stem.dumpcap.log" 2>&1 &
+capture_pid=$!
+
+stop_capture() {
+  kill -INT "$capture_pid" 2>/dev/null || true
+  wait "$capture_pid" 2>/dev/null || true
+}
+trap stop_capture EXIT
+sleep 1
+
+for mask in "${masks[@]}"; do
+  printf 'trial offset=%s mask=0x%02x\n' "$offset" "$mask" | tee -a "$stem.probe.log"
+  /usr/bin/usbreset 06cb:0082 | tee -a "$stem.probe.log"
+  sleep 0.25
+  timeout 15 "$probe" \
+    --blob-dir "$blobs" \
+    --output "$stem-unused.pgm" \
+    --experimental-xor-config-06-body "$offset" "$mask" \
+    --stop-after-config-06 \
+    --i-understand-device-state-will-change \
+    2>&1 | tee -a "$stem.probe.log"
+done
+
+/usr/bin/usbreset 06cb:0082 | tee "$stem.control.log"
+sleep 0.25
+timeout 20 "$probe" \
+  --blob-dir "$blobs" \
+  --output "$stem-control-unused.pgm" \
+  --stop-after-scan-matrix \
+  --i-understand-device-state-will-change \
+  2>&1 | tee -a "$stem.control.log"
+
+stop_capture
+trap - EXIT

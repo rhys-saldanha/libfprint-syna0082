@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 
 #define SYNA0082_VENDOR_ID 0x06cb
@@ -31,6 +32,7 @@ typedef struct
 {
   const char *blob_dir;
   const char *output;
+  bool stop_after_config_06;
   bool stop_after_scan_matrix;
   bool omit_config_06;
   bool flip_config_06_last_bit;
@@ -42,6 +44,9 @@ typedef struct
   bool transplant_config_06_prefix;
   bool transplant_config_06_body;
   bool use_alternate_config_06;
+  bool xor_config_06_body;
+  size_t xor_config_06_offset;
+  uint8_t xor_config_06_mask;
 } Options;
 
 typedef struct
@@ -50,6 +55,20 @@ typedef struct
   enum libusb_transfer_status status;
   int actual_length;
 } BulkRead;
+
+static bool
+parse_u32 (const char *text, unsigned long maximum, unsigned long *value)
+{
+  char *end = NULL;
+  unsigned long parsed;
+
+  errno = 0;
+  parsed = strtoul (text, &end, 0);
+  if (errno != 0 || end == text || *end != '\0' || parsed > maximum)
+    return false;
+  *value = parsed;
+  return true;
+}
 
 static bool
 parse_options (int argc, char **argv, Options *options)
@@ -63,6 +82,8 @@ parse_options (int argc, char **argv, Options *options)
         options->blob_dir = argv[++i];
       else if (strcmp (argv[i], "--output") == 0 && i + 1 < argc)
         options->output = argv[++i];
+      else if (strcmp (argv[i], "--stop-after-config-06") == 0)
+        options->stop_after_config_06 = true;
       else if (strcmp (argv[i], "--stop-after-scan-matrix") == 0)
         options->stop_after_scan_matrix = true;
       else if (strcmp (argv[i],
@@ -97,6 +118,21 @@ parse_options (int argc, char **argv, Options *options)
       else if (strcmp (argv[i],
                        "--experimental-use-alternate-config-06") == 0)
         options->use_alternate_config_06 = true;
+      else if (strcmp (argv[i],
+                       "--experimental-xor-config-06-body") == 0 &&
+               i + 2 < argc)
+        {
+          unsigned long offset;
+          unsigned long mask;
+
+          if (!parse_u32 (argv[++i], SYNA0082_CONFIG_06_LENGTH - 1, &offset) ||
+              !parse_u32 (argv[++i], UINT8_MAX, &mask) ||
+              offset < 261 || mask == 0)
+            return false;
+          options->xor_config_06_body = true;
+          options->xor_config_06_offset = (size_t) offset;
+          options->xor_config_06_mask = (uint8_t) mask;
+        }
       else
         return false;
     }
@@ -110,7 +146,8 @@ parse_options (int argc, char **argv, Options *options)
                              options->flip_config_06_body_bit +
                              options->transplant_config_06_prefix +
                              options->transplant_config_06_body +
-                             options->use_alternate_config_06;
+                             options->use_alternate_config_06 +
+                             options->xor_config_06_body;
   return acknowledged && options->blob_dir != NULL && options->output != NULL &&
          experiments <= 1;
 }
@@ -239,10 +276,23 @@ exchange (libusb_device_handle *handle,
           size_t                response_length,
           const char           *name)
 {
+  struct timespec started;
+  struct timespec finished;
+  long long elapsed_us;
+
+  if (clock_gettime (CLOCK_MONOTONIC, &started) != 0)
+    return false;
   if (!bulk_write (handle, request, request_length, name) ||
       !bulk_read_exact (handle, response, response_length, name))
     return false;
-  printf ("stage=%s response_length=%zu", name, response_length);
+  if (clock_gettime (CLOCK_MONOTONIC, &finished) != 0)
+    return false;
+  elapsed_us = (finished.tv_sec - started.tv_sec) * 1000000LL +
+               (finished.tv_nsec - started.tv_nsec) / 1000LL;
+  printf ("stage=%s response_length=%zu elapsed_us=%lld",
+          name,
+          response_length,
+          elapsed_us);
   if (response_length == 2)
     printf (" status=%02x%02x", response[0], response[1]);
   putchar ('\n');
@@ -497,6 +547,8 @@ main (int argc, char **argv)
                "[--experimental-transplant-config-06-prefix] "
                "[--experimental-transplant-config-06-body] "
                "[--experimental-use-alternate-config-06] "
+               "[--experimental-xor-config-06-body OFFSET MASK] "
+               "[--stop-after-config-06] "
                "[--stop-after-scan-matrix] "
                "--i-understand-device-state-will-change\n",
                argv[0]);
@@ -590,6 +642,16 @@ main (int argc, char **argv)
       memcpy (config_06, alternate_config_06, sizeof (config_06));
       fputs ("experiment=use-alternate-config-06 descriptor=66\n", stderr);
     }
+  else if (options.xor_config_06_body)
+    {
+      config_06[options.xor_config_06_offset] ^= options.xor_config_06_mask;
+      fprintf (stderr,
+               "experiment=xor-config-06-body message-offset=%zu "
+               "payload-offset=%zu mask=%02x\n",
+               options.xor_config_06_offset,
+               options.xor_config_06_offset - 1,
+               options.xor_config_06_mask);
+    }
 
   result = libusb_init (&context);
   if (result != LIBUSB_SUCCESS)
@@ -662,6 +724,12 @@ main (int argc, char **argv)
                   2,
                   "config-06")))
     goto out;
+
+  if (options.stop_after_config_06)
+    {
+      exit_code = 0;
+      goto out;
+    }
 
   if (!exchange (handle,
                  scan_02,

@@ -276,6 +276,31 @@ response. The control stopped before waiting for a finger or sending `0x51`.
 This confirms both recovery and that the transplant outcomes were not caused
 by a stale rejected-config state.
 
+## `0x06` CBC padding-oracle test
+
+The 10,240-byte post-prefix body is exactly 640 AES-sized blocks. To test the
+specific CBC-with-PKCS#7 hypothesis, a guarded runner XORed each nonzero byte
+value `0x01` through `0xff` into complete-message offset 10,484: the final byte
+of the penultimate 16-byte body block. Under ordinary CBC, that position
+controls the final plaintext byte without changing the final ciphertext
+block. The reader was USB-reset before every trial and each invocation stopped
+immediately after the `0x06` response.
+
+All 255 mutations returned `4f 04`. Exchange timing also formed one compact
+cluster: minimum 44,433 us, median 44,653 us, mean 44,699.15 us, 95th
+percentile 44,922 us, maximum 45,020 us, and median absolute deviation 113 us.
+No candidate produced a distinct success, error, or timing class. A final
+unmodified recovery control returned `00 00`, followed by the normal
+2,154-byte `0x02` response.
+
+This rules out an externally visible last-byte CBC padding oracle on this
+validation path. It does not rule out CBC itself: the device may authenticate
+before decrypting, collapse all failures to one status, or use a different
+mode. The external evidence sets are
+`oracle-config06-offset-10484-01` and
+`oracle-config06-offset-10484-02`; the committed runner is
+`tools/run-saber-config06-oracle-matrix`.
+
 ## Verification outcomes
 
 The successful lock-screen capture has one acquisition followed by short
@@ -318,6 +343,15 @@ resetting or reconfiguring it. Command `0x01` returned 38 bytes beginning with
 expected 68-byte frame but began with `00 00 02 00 21`; the Windows capture's
 `00 00 00 03 01` must therefore be treated as device state, not a fixed magic
 prefix.
+
+The same probe now includes statically verified read-only command `0x3e`.
+The device returned a 16-byte success response whose 14-byte body decodes as
+two `0x00ff` JEDEC fields, remaining 16-bit fields `0x1000`, `0x0010`,
+`0x0000`, and `0x0001`, and a zero partition count. The DLL reserves up to
+136 response bytes because partition records are optional; 136 is not the
+wire response length for this device. Evidence `flash-info-02` remains outside
+Git; its pcap SHA-256 is
+`4b4f063a55068ec156ca436deb278dddc3c636898523bbf19efbada57fe70550`.
 
 ## Linux acquisition validation
 

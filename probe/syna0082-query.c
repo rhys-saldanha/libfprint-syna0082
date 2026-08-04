@@ -19,6 +19,7 @@ typedef struct
   int expected_length;
   uint8_t expected_prefix[5];
   size_t expected_prefix_length;
+  bool parse_flash_info;
 } Query;
 
 static const Query queries[] = {
@@ -36,7 +37,80 @@ static const Query queries[] = {
     /* The status fields vary with device state; validate only the framing. */
     .expected_prefix_length = 0,
   },
+  {
+    .name = "flash information",
+    .command = 0x3e,
+    /* The vendor API reserves 0x88 bytes; the wire response is variable. */
+    .expected_length = -1,
+    .expected_prefix = { 0x00, 0x00 },
+    .expected_prefix_length = 2,
+    .parse_flash_info = true,
+  },
 };
+
+static uint16_t
+read_le16 (const uint8_t *value)
+{
+  return (uint16_t) value[0] | (uint16_t) value[1] << 8;
+}
+
+static uint32_t
+read_le32 (const uint8_t *value)
+{
+  return (uint32_t) value[0] |
+         (uint32_t) value[1] << 8 |
+         (uint32_t) value[2] << 16 |
+         (uint32_t) value[3] << 24;
+}
+
+static bool
+print_flash_info (const uint8_t *response,
+                  size_t         response_length)
+{
+  const size_t status_size = 2;
+  const size_t header_size = 14;
+  const size_t partition_size = 12;
+  const uint8_t *header;
+  const uint8_t *partitions;
+  uint16_t partition_count;
+
+  if (response_length < status_size + header_size)
+    return false;
+  header = response + status_size;
+  partitions = header + header_size;
+  partition_count = read_le16 (header + 12);
+  if (partition_count > (response_length - status_size - header_size) /
+                        partition_size)
+    {
+      fprintf (stderr,
+               "flash information declares %u truncated partitions\n",
+               partition_count);
+      return false;
+    }
+
+  printf ("flash_jedec=%04x:%04x blocks=%u unknown0=%u block_size=%u "
+          "unknown1=%u partitions=%u\n",
+          read_le16 (header),
+          read_le16 (header + 2),
+          read_le16 (header + 4),
+          read_le16 (header + 6),
+          read_le16 (header + 8),
+          read_le16 (header + 10),
+          partition_count);
+  for (uint16_t index = 0; index < partition_count; index++)
+    {
+      const uint8_t *partition = partitions + index * partition_size;
+      printf ("flash_partition=%u id=%u type=%u access=0x%04x "
+              "offset=0x%08x size=0x%08x\n",
+              index,
+              partition[0],
+              partition[1],
+              read_le16 (partition + 2),
+              read_le32 (partition + 4),
+              read_le32 (partition + 8));
+    }
+  return true;
+}
 
 static bool
 run_query (libusb_device_handle *handle,
@@ -86,7 +160,7 @@ run_query (libusb_device_handle *handle,
     printf ("%02x", response[i]);
   putchar ('\n');
 
-  if (transferred != query->expected_length)
+  if (query->expected_length >= 0 && transferred != query->expected_length)
     {
       fprintf (stderr,
                "%s returned %d bytes; expected %d\n",
@@ -101,6 +175,12 @@ run_query (libusb_device_handle *handle,
               query->expected_prefix_length) != 0)
     {
       fprintf (stderr, "%s returned an unexpected prefix\n", query->name);
+      return false;
+    }
+  if (query->parse_flash_info &&
+      !print_flash_info (response, (size_t) transferred))
+    {
+      fprintf (stderr, "%s response is malformed\n", query->name);
       return false;
     }
   return true;
@@ -119,8 +199,8 @@ main (int argc, char **argv)
       strcmp (argv[1], "--i-understand-read-only-usb-query") != 0)
     {
       fprintf (stderr,
-               "This probe sends the observed 0x01 and 0x19 information "
-               "queries.\n"
+               "This probe sends the read-only 0x01, 0x19, and 0x3e "
+               "information queries.\n"
                "It does not reset, reconfigure, detach a kernel driver, or "
                "write calibration.\n"
                "Run only after explicit approval:\n"

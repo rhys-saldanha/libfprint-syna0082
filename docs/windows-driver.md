@@ -63,8 +63,24 @@ named `scsSensorConfig.c`. It walks the pointer array to its null terminator,
 compares descriptor fields with sensor identity/capability fields, then copies
 the selected payload using offsets `0x44` and `0x48`. This establishes a
 static, hardware-variant selection mechanism rather than runtime generation.
-Field semantics and the table's internal instruction format are still being
-decoded.
+Machine-code decompilation closes the host-side transform question. Function
+`0x180092620` selects the descriptor. Function `0x180060600` reads its length
+at `+0x44`, allocates exactly that many bytes, copies from the pointer at
+`+0x48`, and passes the unchanged buffer to `0x180064170`. That function hands
+the same buffer to transport function `0x180054b70`. There is no CryptoAPI,
+BCrypt, decrypt, encrypt, IV, or key-derivation call on this path. The bytes in
+the DLL are therefore already in their final protected wire representation;
+there is no Windows-host decryption key to extract from this send path.
+
+The DLL also contains firmware-v4 configuration inspection code associated
+with source unit `scsFwV4.c`. Its `0x180087c90` routine walks a little-endian
+TLV stream with a four-byte record header (`uint16 type`, `uint16 payload
+length`) followed by the named payload. Its type dictionary spans `0x0000`
+through `0x0049` and includes register operations, timeslot tables,
+calibration, security, finger detection, line updates, and receive selection.
+This is a strong candidate for the plaintext language protected by the
+container, but no call edge currently proves that the `0x06` body decrypts
+directly to that stream. We therefore do not yet expose a plaintext generator.
 
 All 75 catalog payloads begin with the same four-byte container header,
 `02 00 00 01`. For every entry, the remaining length is an exact multiple of
@@ -111,6 +127,18 @@ and a block-protected body at `[260, length)`. All 75 post-prefix body lengths
 remain divisible by 16. The selected PQI payload has a 10,240-byte post-prefix
 body. The fixed prefix has RSA-2048 size, but its semantics remain unresolved.
 
+The RSA-size observation was tested rather than assumed. Every catalog prefix
+was interpreted in both byte orders and checked with exponents 3, 17, and
+65,537 against every opaque 256-byte public value in the two documented
+`scsSSPubKey.c` catalogs, also in both modulus byte orders. None produced
+strict PKCS#1 v1.5 type-1 padding. A second exhaustive scan treated every
+four-byte-aligned 256-byte DLL window as a possible modulus with exponent
+65,537; it also found no strict signature encoding. The documented public-key
+catalogs belong to another security path, and the prefix is not an ordinary
+PKCS#1 v1.5 signature verifiable by an obvious public modulus embedded in this
+DLL. `tools/syna0082_container_map.py` reproduces the bounded catalog test;
+the much larger exploratory window scan remains an external analysis result.
+
 Cross-descriptor device trials refine its role. A same-length donor from the
 same PQI selector family is rejected with `be 04` even when its original prefix
 and body are sent together. Transplanting only that donor prefix also gives
@@ -140,6 +168,44 @@ private signing key or a generator for the protected config container:
 
 The container-map tool reports only selectors, layouts, RVAs, and canonical
 public-key hashes. It never emits key bytes or protected payloads.
+
+## Firmware and flash path
+
+The official PQI download page still serves the 2017 Win7 package as driver
+ID 516. The downloaded ZIP is 40,516,755 bytes with SHA-256
+`d1c4ce8d7d28208064c704b846313d3684d42b034a81c260652c218f278293ab`.
+It contains only x64 and x86 MSI packages. Administrative extraction of the
+x64 MSI yields the same executables, DLLs, INF, catalog, and shortcut already
+inventoried above; there is no firmware image or configuration source. The
+package remains outside Git. Source:
+<https://us.pqigroup.com/prod_driver.aspx?mnuid=1286&modid=138&prodid=1472>.
+
+The DLL's firmware-update dispatch table provides exact protocol boundaries:
+
+| Command | Request | Vendor operation |
+| --- | --- | --- |
+| `0x3e` | one byte | flash and partition information |
+| `0x3f` | two bytes | erase partition |
+| `0x40` | 13 bytes | read partition range |
+| `0x41` | 13-byte header plus data | write partition range |
+| `0x42` | five-byte header plus signature | write firmware signature |
+| `0x43` | two bytes | firmware-extension information |
+
+The read request is `opcode`, `partition`, a one-byte flag, two reserved zero
+bytes, little-endian 32-bit address, and little-endian 32-bit size. Its vendor
+API reserves `size + 8` response bytes. This exactly matches the independently
+implemented `0x40` request in python-validity; importantly, the corresponding
+firmware partition in that related protocol is marked write-only and is
+decrypted on write, while only its certificate-store partition is readable.
+
+Our reader's direct, read-only `0x3e` response is only 16 bytes:
+`00 00 ff 00 ff 00 00 10 10 00 00 00 01 00 00 00`. It reports the two
+JEDEC fields as `0x00ff`, returns zero partitions, and therefore exposes no
+firmware range for `0x40` readback. The vendor API's `0x88` is a maximum buffer
+size, not a fixed wire length. This closes the documented protocol-readback
+route to the code that validates/decrypts `0x06`; obtaining that code now
+requires a genuine firmware image from another package or a hardware-level
+ROM/debug extraction rather than another host-DLL search.
 
 ## Open-source cross-check
 
