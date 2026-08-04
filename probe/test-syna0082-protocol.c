@@ -36,7 +36,18 @@ int
 main (void)
 {
   uint8_t response[RESPONSE_SIZE];
+  uint8_t config[SYNA0082_SCAN_CONFIG_SIZE];
   Syna0082Image image = { 0 };
+
+  syna0082_build_scan_config_v1 (config);
+  assert (config[0] == 0x39);
+  assert (config[1] == 0x20);
+  assert (config[2] == 0xbf);
+  assert (config[3] == 0x02);
+  assert (config[5] == 0xff && config[6] == 0xff);
+  assert (config[10] == 0xd1);
+  assert (config[72] == 0x20);
+  assert (config[124] == 0);
 
   make_valid_response (response);
   assert (syna0082_parse_image (response, sizeof (response), &image) ==

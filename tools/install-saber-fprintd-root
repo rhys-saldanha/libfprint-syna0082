@@ -10,7 +10,7 @@ package=${1:?usage: install-saber-fprintd-root PACKAGE BLOB_DIRECTORY}
 blob_source=${2:?usage: install-saber-fprintd-root PACKAGE BLOB_DIRECTORY}
 blob_target=/var/lib/libfprint/syna0082
 
-for name in config-39.bin config-06.bin scan-matrix-02.bin; do
+for name in config-06.bin scan-matrix-02.bin; do
   if [[ ! -f "$blob_source/$name" ]]; then
     echo "Missing required blob: $blob_source/$name" >&2
     exit 1
@@ -18,7 +18,7 @@ for name in config-39.bin config-06.bin scan-matrix-02.bin; do
 done
 
 install -d -o root -g root -m 0700 "$blob_target"
-for name in config-39.bin config-06.bin scan-matrix-02.bin; do
+for name in config-06.bin scan-matrix-02.bin; do
   install -o root -g root -m 0600 "$blob_source/$name" "$blob_target/$name"
 done
 

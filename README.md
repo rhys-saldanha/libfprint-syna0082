@@ -57,8 +57,9 @@ contains partial USB experiments, not a working driver.
   device or sends transfers.
 - `probe/syna0082-query.c`: guarded 0x01/0x19 information-query probe; build
   it for review, but do not execute it without explicit approval.
-- `probe/syna0082-scan.c`: guarded single-frame acquisition probe using the
-  device-specific blobs extracted outside Git.
+- `probe/syna0082-scan.c`: guarded single-frame acquisition probe; its `0x39`
+  message is generated from fields while two unresolved device records remain
+  outside Git.
 - `udev/60-libfprint-06cb0082.rules`: grants the active local session access
   to the development reader without running probes as root.
 - `udev/60-usbmon-wireshark.rules`: permits reproducible Linux USB captures

@@ -22,7 +22,6 @@
 #define SYNA0082_EP_INTERRUPT 0x83
 #define SYNA0082_BULK_TIMEOUT_MS 3000
 #define SYNA0082_INTERRUPT_TIMEOUT_MS 30000
-#define SYNA0082_CONFIG_39_LENGTH 125U
 #define SYNA0082_CONFIG_06_LENGTH 10501U
 #define SYNA0082_SCAN_02_LENGTH 18869U
 #define SYNA0082_SCAN_RESPONSE_LENGTH 2154U
@@ -416,7 +415,7 @@ main (int argc, char **argv)
   static const uint8_t command_75[] = { 0x75 };
   static const uint8_t command_51[] = { 0x51, 0x00, 0x20, 0x00, 0x00 };
   Options options;
-  uint8_t config_39[SYNA0082_CONFIG_39_LENGTH];
+  uint8_t config_39[SYNA0082_SCAN_CONFIG_SIZE];
   uint8_t config_06[SYNA0082_CONFIG_06_LENGTH];
   uint8_t scan_02[SYNA0082_SCAN_02_LENGTH];
   uint8_t response[SYNA0082_IMAGE_RESPONSE_LENGTH];
@@ -435,12 +434,8 @@ main (int argc, char **argv)
                argv[0]);
       return 2;
     }
+  syna0082_build_scan_config_v1 (config_39);
   if (!load_blob (options.blob_dir,
-                  "config-39.bin",
-                  config_39,
-                  sizeof (config_39),
-                  0x39) ||
-      !load_blob (options.blob_dir,
                   "config-06.bin",
                   config_06,
                   sizeof (config_06),

@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #define SYNA0082_IMAGE_HEADER_SIZE 18U
+#define SYNA0082_SCAN_CONFIG_SIZE 125U
 
 typedef enum
 {
@@ -26,3 +27,5 @@ typedef struct
 Syna0082ParseResult syna0082_parse_image (const uint8_t *data,
                                            size_t         length,
                                            Syna0082Image *image);
+
+void syna0082_build_scan_config_v1 (uint8_t output[SYNA0082_SCAN_CONFIG_SIZE]);

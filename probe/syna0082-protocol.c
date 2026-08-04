@@ -17,6 +17,27 @@ read_le32 (const uint8_t *data)
          ((uint32_t) data[3] << 24);
 }
 
+void
+syna0082_build_scan_config_v1 (uint8_t output[SYNA0082_SCAN_CONFIG_SIZE])
+{
+  static const struct
+  {
+    uint8_t offset;
+    uint8_t value;
+  } fields[] = {
+    { 0, 0x39 }, { 1, 0x20 }, { 2, 0xbf }, { 3, 0x02 },
+    { 5, 0xff }, { 6, 0xff }, { 9, 0x01 }, { 10, 0xd1 },
+    { 12, 0x20 }, { 17, 0xd1 }, { 18, 0xd1 }, { 32, 0x20 },
+    { 45, 0xff }, { 46, 0xff }, { 50, 0xd1 }, { 52, 0x20 },
+    { 72, 0x20 },
+  };
+  size_t i;
+
+  memset (output, 0, SYNA0082_SCAN_CONFIG_SIZE);
+  for (i = 0; i < sizeof (fields) / sizeof (fields[0]); i++)
+    output[fields[i].offset] = fields[i].value;
+}
+
 Syna0082ParseResult
 syna0082_parse_image (const uint8_t *data,
                       size_t         length,

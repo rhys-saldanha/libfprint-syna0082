@@ -40,6 +40,10 @@ It matches every enrollment `0x39` record and the baseline records in both
 verification captures. The three remaining variants are final/status records
 and are deliberately not generated.
 
+The standalone probe and experimental libfprint driver use the same field
+builder. Consequently `config-39.bin` is no longer a runtime dependency; the
+remaining blockers are `0x06` and the structured 10,356-byte `0x02` prefix.
+
 One lock/unlock transaction associates a six-byte response with `0x51`
 instead of the normal 8,082-byte image. This is retained as a validation
 warning because sequential endpoint pairing cannot distinguish every

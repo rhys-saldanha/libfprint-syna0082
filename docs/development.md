@@ -23,6 +23,10 @@ the current upstream tree passes 130/130 tests. OpenCV is linked as the minimal
 core, image-processing, feature, geometry/calibration, and FLANN module set so
 optional VTK/HDF modules do not leak into libfprint's introspection link.
 
+The same 130/130 suite passes after replacing `config-39.bin` with the
+independent field builder. The corresponding upstream working-tree commit is
+`913e4b2`, exported as patch 0004 in this repository.
+
 The Windows cold-plug, enrollment, match, and miss-then-match captures normalize
 to 54, 336, 100, and 148 USB records respectively using
 `tools/usbpcap-summary.py`.
@@ -66,7 +70,8 @@ sudo usermod -aG wireshark alperen
 sudo modprobe usbmon
 ```
 
-The single-frame probe consumes device-specific blobs kept outside Git:
+The single-frame probe generates `0x39` independently and consumes the two
+remaining device-specific records kept outside Git:
 
 ```bash
 build/syna0082-scan \
@@ -83,9 +88,9 @@ probe log alongside the PGM while refusing to overwrite any existing output.
 The development examples honor `LIBFPRINT_SYNA0082_BLOB_DIR`. The system
 fprintd unit uses `ProtectHome=true`, so the driver defaults to
 `/var/lib/libfprint/syna0082`. `tools/install-saber-fprintd-root` copies only
-`config-39.bin`, `config-06.bin`, and `scan-matrix-02.bin` there as root-owned
-mode-0600 files, installs the locally built package, and restarts fprintd if it
-is already running.
+`config-06.bin` and `scan-matrix-02.bin` there as root-owned mode-0600 files,
+installs the locally built package, and restarts fprintd if it is already
+running. An older `config-39.bin` is ignored and is not removed automatically.
 
 The operation replaces the installed `libfprint-git` package. Saber keeps its
 previous package in `/var/cache/pacman/pkg`, so rollback is available with
