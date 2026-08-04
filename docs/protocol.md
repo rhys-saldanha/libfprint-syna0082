@@ -146,6 +146,17 @@ consistent with an encrypted or otherwise protected block container, but does
 not yet establish the cipher, mode, key source, or signature format. The
 Windows send path copies the prebuilt bytes rather than generating them.
 
+Across all 75 payloads, the only duplicated aligned body blocks form one
+contiguous 512-byte run shared by catalog entries 7 and 30 at payload offset
+260. The remaining 31,399 body blocks are unique. This is evidence that the
+container can preserve an identical fixed-position protected subrecord across
+different sensor configurations; it is not evidence that the first 256 bytes
+are an RSA envelope. The DLL's RSA/P-256 public-key catalogs belong to a
+separate sensor-security handshake path. PQI selectors `06 14 00/01` use the
+P-256-shaped table, consistent with the vendor's documented ECC
+authentication. `tools/syna0082_container_map.py` reproduces both findings
+without outputting proprietary bytes.
+
 An exhaustive byte-sequence map strengthens that result: scan-matrix range
 `[10356, 18869)` is exactly calibration range `[8915, 17428)`. This single
 8,513-byte run accounts for 45.1163% of the complete `0x02` message. The

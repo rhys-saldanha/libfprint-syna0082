@@ -76,12 +76,63 @@ to name a cipher or mode: the host-side path copies the prebuilt container and
 does not decrypt it.
 
 The older reference driver `5.5.4018.1052` places the same 75-entry catalog at
-RVA `0x161370`, exactly `0x100` earlier. Its index-39 payload has the identical
-SHA-256, `67f4a332d89f76fe12c57fa7f67b43a076f689e78267b888c694e26b05caacc1`.
-Pass `--catalog-rva 0x161370` when inventorying that version; the tool's
-default is deliberately tied to the documented current DLL.
+RVA `0x161370`, exactly `0x100` earlier. All 75 selector tuples, lengths, and
+payload hashes are identical between versions 5.5.4018 and 5.5.4021, not only
+index 39. Pass `--catalog-rva 0x161370` when inventorying the older version;
+the tool's default is deliberately tied to the documented current DLL.
 
 `tools/syna0082_descriptor_catalog.py` reproduces the catalog inventory. Its
 JSON contains only RVAs, lengths, selector values, and SHA-256 hashes. With
 `--payload`, it identifies a capture (including a leading command byte) by
 hash and exact comparison without printing proprietary bytes.
+
+## Protected-container structure
+
+`tools/syna0082_container_map.py` performs a hash-only block comparison across
+all 75 payloads. Their four-byte prefix is uniformly `02 00 00 01`; everything
+after it is 16-byte aligned. The catalog contains 31,463 aligned body blocks,
+of which 31,431 are unique. The only repeated values are 32 consecutive blocks
+shared by descriptors 7 and 30: a 512-byte run beginning at payload offset
+260 (`4 + 16 * 16`). Its SHA-256 is
+`48d6e4b620983aca60cdd9f06fbd371bf073404273d1d3e7fbe8b9922388c39b`.
+
+That run rules out treating the complete body as ordinary randomized
+ciphertext. It is compatible with independently protected fixed-position
+records, a deterministic block mode, or a shared opaque subrecord. It does not
+prove that offset 260 is a universal field boundary, nor does it identify a
+cipher, IV, MAC, signature, or plaintext instruction encoding. In particular,
+the selected PQI descriptor 39 does not participate in the repeated run.
+
+## Sensor-security public keys
+
+The `scsSSPubKey.c` lookup is separate from the sensor-config catalog. It has
+two null-terminated tables of `0x103`-byte records: a three-byte sensor selector
+followed by a 256-byte key field. The first table holds opaque 256-byte integer
+values and feeds a CryptoAPI RSA public-key builder with an explicit 2048-bit
+parameter. Its caller verifies a 256-byte value obtained from the sensor with
+`CryptVerifySignatureA`; this is sensor-security validation, not verification
+of the static `0x06` buffer.
+
+The second table covers selectors including the PQI family `06 14 00` and
+`06 14 01`. Each key contains a 32-byte X coordinate at offset 0 and a 32-byte
+Y coordinate at offset 68, with zero padding between and after them. The
+security-management caller materializes two 32-byte coordinates and follows
+the driver's P-256 path. This matches Synaptics' description of My Lockey using
+ECC authentication and AES transport protection, but it does not expose a
+private signing key or a generator for the protected config container:
+<https://www.synaptics.com/company/news/pqi-securelink>.
+
+The container-map tool reports only selectors, layouts, RVAs, and canonical
+public-key hashes. It never emits key bytes or protected payloads.
+
+## Open-source cross-check
+
+Validity90 revision `8b80cfeae15487d5e13ff5ff3ab4f282eac765be` contains a
+captured `init_sequence_msg4` for related hardware. After removing its leading
+`0x06` command byte, the 484-byte value is byte-identical to this DLL's catalog
+descriptor 55 (SHA-256
+`7071967a90f5a5ad82e206bdb5ab7aefdfb231cb106ea89dcbd11a64381f7bb1`).
+That gives the protected-container family independent, public provenance back
+to the 2017–2019 prototype. The prototype replays the opaque constant; it does
+not parse or generate the protected format. We therefore retain the hash and
+attribution but do not copy the captured bytes into this repository.

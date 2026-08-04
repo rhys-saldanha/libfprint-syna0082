@@ -1,5 +1,19 @@
 # Offline protocol tooling
 
+## Protected config and key catalogs
+
+Run the offline, hash-only container map against an uncommitted reference DLL:
+
+```powershell
+python tools/syna0082_container_map.py C:\fingerprint-lab\windows-driver\synaWudfBioUsb52.dll
+```
+
+It inventories the common header, aligned-block reuse, and the separate
+sensor-security public-key catalogs. The output contains hashes and structural
+metadata only. For an older DLL, override the sensor-config catalog RVA with
+`--catalog-rva`; security-key RVAs must likewise be supplied explicitly if
+they moved.
+
 `tools/syna0082_protocol.py` turns normalized USB JSON Lines into a stable,
 machine-readable protocol view. It never opens the USB device and never sends
 traffic. Payloads are represented by length, prefix, and SHA-256 unless the
