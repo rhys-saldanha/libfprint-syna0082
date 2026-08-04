@@ -66,6 +66,15 @@ static, hardware-variant selection mechanism rather than runtime generation.
 Field semantics and the table's internal instruction format are still being
 decoded.
 
+All 75 catalog payloads begin with the same four-byte container header,
+`02 00 00 01`. For every entry, the remaining length is an exact multiple of
+16 bytes. Index 39's body has approximately 7.98 bits/byte of Shannon entropy
+and no repeated aligned four-byte words. Together with the driver's separate
+sensor-security/public-key path (`scsSSPubKey.c`), this is strong evidence for
+a protected, block-oriented sensor-configuration container. It is not enough
+to name a cipher or mode: the host-side path copies the prebuilt container and
+does not decrypt it.
+
 The older reference driver `5.5.4018.1052` places the same 75-entry catalog at
 RVA `0x161370`, exactly `0x100` earlier. Its index-39 payload has the identical
 SHA-256, `67f4a332d89f76fe12c57fa7f67b43a076f689e78267b888c694e26b05caacc1`.

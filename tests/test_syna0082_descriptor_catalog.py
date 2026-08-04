@@ -30,7 +30,7 @@ class FakeReader:
 
 
 class DescriptorCatalogTests(unittest.TestCase):
-    def make_record(self, payload_rva=0x3000, payload=b"table"):
+    def make_record(self, payload_rva=0x3000, payload=b"\x02\x00\x00\x01" + bytes(16)):
         record = bytearray(catalog.DESCRIPTOR_SIZE)
         for position, offset in enumerate(catalog.SELECTOR_OFFSETS):
             struct.pack_into("<I", record, offset, position + 1)
@@ -39,7 +39,7 @@ class DescriptorCatalogTests(unittest.TestCase):
         return bytes(record)
 
     def test_parses_fixed_descriptor_layout(self):
-        payload = b"static sensor program"
+        payload = b"\x02\x00\x00\x01" + bytes(32)
         record = self.make_record(payload=payload)
         reader = FakeReader({(0x3000, len(payload)): payload})
         result = catalog.parse_descriptor(39, 0x2000, record, reader)
@@ -47,9 +47,11 @@ class DescriptorCatalogTests(unittest.TestCase):
         self.assertEqual(result.selectors, tuple(range(1, 14)))
         self.assertEqual(result.payload_length, len(payload))
         self.assertEqual(result.payload_sha256, hashlib.sha256(payload).hexdigest())
+        self.assertEqual(result.container_header, "02000001")
+        self.assertTrue(result.body_multiple_of_16)
 
     def test_catalog_uses_pointer_entries_until_null(self):
-        payload = b"table"
+        payload = b"\x02\x00\x00\x01" + bytes(16)
         record = self.make_record(payload=payload)
         reader = FakeReader({
             (0x1000, 8): struct.pack("<Q", 0x180002000),
@@ -64,7 +66,7 @@ class DescriptorCatalogTests(unittest.TestCase):
     def test_rejects_nonzero_reserved_prefix(self):
         record = bytearray(self.make_record())
         record[0] = 1
-        reader = FakeReader({(0x3000, 5): b"table"})
+        reader = FakeReader({(0x3000, 20): b"\x02\x00\x00\x01" + bytes(16)})
         with self.assertRaisesRegex(ValueError, "reserved prefix"):
             catalog.parse_descriptor(0, 0x2000, bytes(record), reader)
 

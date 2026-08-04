@@ -140,6 +140,12 @@ explains why another same-length table exists but cannot be substituted based
 on size. See `docs/windows-driver.md` and
 `tools/syna0082_descriptor_catalog.py` for the hash-only reproducible map.
 
+Every catalog payload has the common `02 00 00 01` container header and a body
+whose length is divisible by 16. The selected body is high-entropy. This is
+consistent with an encrypted or otherwise protected block container, but does
+not yet establish the cipher, mode, key source, or signature format. The
+Windows send path copies the prebuilt bytes rather than generating them.
+
 An exhaustive byte-sequence map strengthens that result: scan-matrix range
 `[10356, 18869)` is exactly calibration range `[8915, 17428)`. This single
 8,513-byte run accounts for 45.1163% of the complete `0x02` message. The

@@ -27,6 +27,8 @@ class Descriptor:
     payload_length: int
     payload_rva: int
     payload_sha256: str
+    container_header: str
+    body_multiple_of_16: bool
 
     def as_json(self) -> dict[str, object]:
         return {
@@ -36,6 +38,9 @@ class Descriptor:
             "payload_length": self.payload_length,
             "payload_rva": f"0x{self.payload_rva:x}",
             "payload_sha256": self.payload_sha256,
+            "container_header": self.container_header,
+            "body_length": self.payload_length - 4,
+            "body_multiple_of_16": self.body_multiple_of_16,
         }
 
 
@@ -79,6 +84,8 @@ def parse_descriptor(index: int, rva: int, record: bytes, reader: PEReader) -> D
     payload_pointer = struct.unpack_from("<Q", record, PAYLOAD_POINTER_OFFSET)[0]
     payload_rva = reader.pointer_to_rva(payload_pointer)
     payload = reader.read_rva(payload_rva, payload_length)
+    if payload_length < 4:
+        raise ValueError(f"descriptor {index} payload is shorter than its container header")
     return Descriptor(
         index=index,
         rva=rva,
@@ -86,6 +93,8 @@ def parse_descriptor(index: int, rva: int, record: bytes, reader: PEReader) -> D
         payload_length=payload_length,
         payload_rva=payload_rva,
         payload_sha256=hashlib.sha256(payload).hexdigest(),
+        container_header=payload[:4].hex(),
+        body_multiple_of_16=(payload_length - 4) % 16 == 0,
     )
 
 
