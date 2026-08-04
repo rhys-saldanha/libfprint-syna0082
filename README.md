@@ -38,6 +38,13 @@ contains partial USB experiments, not a working driver.
 - `tools/run-windows-calibration-inspection.ps1`: one-shot scheduled-task
   launcher with collision checks and automatic cleanup.
 - `tools/usbpcap-summary.py`: normalize one USB device's capture to JSON Lines.
+- `tools/syna0082_protocol.py`: offline decode, diff, validation, safe message
+  generation, and capture-coverage reports; see `docs/protocol-tooling.md`.
+- `protocol/commands.json`: machine-readable command/risk/evidence schema.
+- `tools/syna0082_driver_inventory.py`: hash-only static crypto, registry,
+  I/O, firmware, and calibration capability inventory for the vendor DLL.
+- `tools/syna0082_calibration_map.py`: report byte-range provenance from
+  decrypted calibration to scan matrix without dumping either artifact.
 - `tools/syna0082-image-summary.py`: validate raw image records and optionally
   extract them outside any Git worktree.
 - `tools/syna0082_matcher.py`: independent descriptor-gallery matcher for the

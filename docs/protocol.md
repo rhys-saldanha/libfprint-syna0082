@@ -113,8 +113,9 @@ elevated diagnostic; it is not required for capture parsing.
 An approved one-shot diagnostic running as SYSTEM successfully decrypted the
 value in memory. The plaintext is 26,244 bytes with a SHA-256 of
 15198b4707710388def9bdc7449dac558012776fc77681b4ee1397fba3dc236b
-and Shannon entropy of approximately 4.88 bits per byte. It was never written
-to disk.
+and Shannon entropy of approximately 4.88 bits per byte. The approved research
+workflow later persisted it outside Git under `~/fingerprint-lab`; neither it
+nor material derived from it is committed.
 
 The diagnostic sampled non-overlapping 64-byte chunks every 256 bytes from
 each large host-to-device capture payload. For all three observed 18,869-byte
@@ -122,6 +123,13 @@ each large host-to-device capture payload. For all three observed 18,869-byte
 plaintext. No sampled chunk from the 10,501-byte 0x06 payload occurs there.
 This establishes that 0x02 is substantially assembled from calibration data,
 while 0x06 has a different source.
+
+An exhaustive byte-sequence map strengthens that result: scan-matrix range
+`[10356, 18869)` is exactly calibration range `[8915, 17428)`. This single
+8,513-byte run accounts for 45.1163% of the complete `0x02` message. The
+10,356-byte prefix contains structured sensor/register records and is not a
+direct calibration copy. `tools/syna0082_calibration_map.py` reproduces this
+mapping using only hashes, offsets, and lengths in its output.
 
 The three captured 18,869-byte 0x02 variants differ at exactly one byte:
 offset 1,749. The value is 0x02 for initial acquisition setup, 0x23 during

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "device": "06cb:0082",
+  "transport": {
+    "command_endpoint": "0x01",
+    "response_endpoint": "0x81",
+    "interrupt_endpoint": "0x83"
+  },
+  "commands": {
+    "01": {"name": "device_info", "lengths": [1], "responses": [38], "risk": "read-only", "confidence": "high", "generator": "literal"},
+    "02": {"name": "scan_matrix", "lengths": [18869], "responses": [2154], "risk": "configuration", "confidence": "high", "generator": null, "mode_offset": 1749, "observed_modes": {"02": "initial", "13": "verify", "23": "enroll"}},
+    "04": {"name": "operation_finalize_a", "lengths": [1], "responses": [], "risk": "unknown", "confidence": "low", "generator": null},
+    "06": {"name": "security_configuration", "lengths": [10501], "responses": [2], "risk": "security", "confidence": "medium", "generator": null},
+    "07": {"name": "cold_init_short", "lengths": [6], "responses": [], "risk": "configuration", "confidence": "low", "generator": null},
+    "08": {"name": "cold_init_long", "lengths": [10], "responses": [], "risk": "configuration", "confidence": "low", "generator": null},
+    "17": {"name": "operation_transition", "lengths": [1], "responses": [], "risk": "unknown", "confidence": "low", "generator": null},
+    "19": {"name": "sensor_info", "lengths": [1], "responses": [64, 4], "risk": "read-only", "confidence": "high", "generator": "literal"},
+    "1a": {"name": "operation_begin", "lengths": [1], "responses": [2], "risk": "operation", "confidence": "medium", "generator": "literal"},
+    "39": {"name": "scan_configuration", "lengths": [125], "responses": [2], "risk": "configuration", "confidence": "medium", "generator": "scan_configuration_v1"},
+    "51": {"name": "capture", "lengths": [5], "responses": [8082], "risk": "acquisition", "confidence": "high", "generator": "capture"},
+    "52": {"name": "operation_finalize_b", "lengths": [1], "responses": [], "risk": "unknown", "confidence": "low", "generator": null},
+    "75": {"name": "geometry", "lengths": [1], "responses": [10], "risk": "read-only", "confidence": "high", "generator": "literal"}
+  },
+  "control_requests": {
+    "14": {"name": "operation_control", "direction": "device-to-host", "response_length": 2, "risk": "operation", "confidence": "high"}
+  },
+  "known_response_lengths": {
+    "8082": "raw_image_56x144",
+    "2154": "scan_matrix_acknowledgement"
+  }
+}
