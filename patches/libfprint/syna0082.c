@@ -39,7 +39,6 @@ struct _FpiDeviceSyna0082
   gsize          rearm_stage;
   guint          capture_count;
   gboolean       deactivating;
-  gboolean       session_active;
   gboolean       awaiting_release;
   gboolean       wake_retry_used;
 };
@@ -123,7 +122,6 @@ complete_deactivation (FpiDeviceSyna0082 *self)
   if (!self->deactivating)
     return;
   self->deactivating = FALSE;
-  self->session_active = FALSE;
   fpi_image_device_deactivate_complete (FP_IMAGE_DEVICE (self), NULL);
 }
 
@@ -136,10 +134,8 @@ fail_session_or_deactivate (FpiDeviceSyna0082 *self,
       g_clear_error (&error);
       complete_deactivation (self);
     }
-  else if (self->session_active)
-    fpi_image_device_session_error (FP_IMAGE_DEVICE (self), error);
   else
-    g_clear_error (&error);
+    fpi_image_device_session_error (FP_IMAGE_DEVICE (self), error);
 }
 
 static void
@@ -520,7 +516,6 @@ dev_activate (FpImageDevice *image_device)
   FpiDeviceSyna0082 *self = FPI_DEVICE_SYNA0082 (image_device);
 
   self->deactivating = FALSE;
-  self->session_active = TRUE;
   self->init_stage = 0;
   self->capture_count = 0;
   self->awaiting_release = FALSE;
@@ -710,15 +705,16 @@ dev_extract_print (FpImageDevice *image_device,
                    FpPrint      **print,
                    GError       **error)
 {
+  FpiDeviceSyna0082 *self = FPI_DEVICE_SYNA0082 (image_device);
   g_autoptr(GBytes) features = NULL;
   g_autoptr(GVariant) data = NULL;
   gconstpointer bytes;
   gsize length;
 
   features = syna0082_matcher_extract (image->data,
-                                      image->width,
-                                      image->height,
-                                      error);
+                                       image->width,
+                                       image->height,
+                                       error);
   if (!features)
     {
       g_autofree gchar *message = g_strdup ((*error)->message);
@@ -727,6 +723,18 @@ dev_extract_print (FpImageDevice *image_device,
       *error = fpi_device_retry_new_msg (FP_DEVICE_RETRY_GENERAL, "%s", message);
       return FALSE;
     }
+
+  /* On the final enrollment stage the framework synchronously processes the
+   * print inside image_captured() and deactivates the device while the state
+   * machine is still in AWAIT_FINGER_OFF. Report the finger as removed now so
+   * that deactivation happens from IDLE instead; without this the process
+   * warns "Deactivating image device while it is not idle", which the
+   * regression harness turns fatal via G_DEBUG=fatal-warnings. Earlier stages
+   * keep the delayed finger-off so a held finger cannot satisfy a second
+   * stage. */
+  if (fpi_device_get_current_action (FP_DEVICE (image_device)) == FPI_DEVICE_ACTION_ENROLL &&
+      self->capture_count == (guint) fp_device_get_nr_enroll_stages (FP_DEVICE (image_device)))
+    fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (image_device), FALSE);
 
   bytes = g_bytes_get_data (features, &length);
   data = g_variant_ref_sink (

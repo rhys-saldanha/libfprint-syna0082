@@ -1,0 +1,61 @@
+From 8f5dd0b27953c61a62963bb16322876865e9d095 Mon Sep 17 00:00:00 2001
+From: Rhys Saldanha <18572231+rhys-saldanha@users.noreply.github.com>
+Date: Thu, 24 Sep 2026 23:06:45 +0100
+Subject: [PATCH 7/8] fix(syna0082): report finger removal at the end of the
+ final enroll stage
+
+image_captured() processes the final print synchronously and the framework
+deactivates the device while the state machine is still AWAIT_FINGER_OFF,
+which warns that deactivation happens while not idle. Report the finger as
+removed on the last stage so deactivation runs from IDLE; earlier stages keep
+the delayed finger-off so a held finger cannot satisfy a second stage.
+---
+ libfprint/drivers/syna0082.c | 19 ++++++++++++++++---
+ 1 file changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/libfprint/drivers/syna0082.c b/libfprint/drivers/syna0082.c
+index fb140bbb..aacb0e5e 100644
+--- a/libfprint/drivers/syna0082.c
++++ b/libfprint/drivers/syna0082.c
+@@ -705,15 +705,16 @@ dev_extract_print (FpImageDevice *image_device,
+                    FpPrint      **print,
+                    GError       **error)
+ {
++  FpiDeviceSyna0082 *self = FPI_DEVICE_SYNA0082 (image_device);
+   g_autoptr(GBytes) features = NULL;
+   g_autoptr(GVariant) data = NULL;
+   gconstpointer bytes;
+   gsize length;
+ 
+   features = syna0082_matcher_extract (image->data,
+-                                      image->width,
+-                                      image->height,
+-                                      error);
++                                       image->width,
++                                       image->height,
++                                       error);
+   if (!features)
+     {
+       g_autofree gchar *message = g_strdup ((*error)->message);
+@@ -723,6 +724,18 @@ dev_extract_print (FpImageDevice *image_device,
+       return FALSE;
+     }
+ 
++  /* On the final enrollment stage the framework synchronously processes the
++   * print inside image_captured() and deactivates the device while the state
++   * machine is still in AWAIT_FINGER_OFF. Report the finger as removed now so
++   * that deactivation happens from IDLE instead; without this the process
++   * warns "Deactivating image device while it is not idle", which the
++   * regression harness turns fatal via G_DEBUG=fatal-warnings. Earlier stages
++   * keep the delayed finger-off so a held finger cannot satisfy a second
++   * stage. */
++  if (fpi_device_get_current_action (FP_DEVICE (image_device)) == FPI_DEVICE_ACTION_ENROLL &&
++      self->capture_count == (guint) fp_device_get_nr_enroll_stages (FP_DEVICE (image_device)))
++    fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (image_device), FALSE);
++
+   bytes = g_bytes_get_data (features, &length);
+   data = g_variant_ref_sink (
+     g_variant_new_fixed_array (G_VARIANT_TYPE_BYTE, bytes, length, 1));
+-- 
+2.55.0
+

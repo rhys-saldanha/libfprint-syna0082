@@ -1,7 +1,7 @@
-From 92f1a5220076a29fff4ad8c62292180a6000805f Mon Sep 17 00:00:00 2001
+From bc810358a8c271769a9dac352fa031922ef7b3f5 Mon Sep 17 00:00:00 2001
 From: Alperen Elhan <alperen@elhan.org>
 Date: Tue, 4 Aug 2026 20:14:27 +0300
-Subject: [PATCH] feat(syna0082): add independent small-area matcher
+Subject: [PATCH 2/8] feat(syna0082): add independent small-area matcher
 
 ---
  libfprint/drivers/syna0082-matcher.cpp | 303 +++++++++++++++++++++++++
@@ -18,7 +18,7 @@ Subject: [PATCH] feat(syna0082): add independent small-area matcher
 
 diff --git a/libfprint/drivers/syna0082-matcher.cpp b/libfprint/drivers/syna0082-matcher.cpp
 new file mode 100644
-index 0000000..0c497f9
+index 00000000..0c497f97
 --- /dev/null
 +++ b/libfprint/drivers/syna0082-matcher.cpp
 @@ -0,0 +1,303 @@
@@ -327,7 +327,7 @@ index 0000000..0c497f9
 +}
 diff --git a/libfprint/drivers/syna0082-matcher.h b/libfprint/drivers/syna0082-matcher.h
 new file mode 100644
-index 0000000..6642c5b
+index 00000000..6642c5ba
 --- /dev/null
 +++ b/libfprint/drivers/syna0082-matcher.h
 @@ -0,0 +1,36 @@
@@ -368,7 +368,7 @@ index 0000000..6642c5b
 +
 +G_END_DECLS
 diff --git a/libfprint/drivers/syna0082.c b/libfprint/drivers/syna0082.c
-index 0fb9341..7ea6011 100644
+index 0fb93415..7ea60110 100644
 --- a/libfprint/drivers/syna0082.c
 +++ b/libfprint/drivers/syna0082.c
 @@ -9,6 +9,7 @@
@@ -651,7 +651,7 @@ index 0fb9341..7ea6011 100644
    image_class->img_height = IMAGE_HEIGHT;
  }
 diff --git a/libfprint/fp-image-device.c b/libfprint/fp-image-device.c
-index ac88ffd..06794e8 100644
+index ac88ffd9..06794e8f 100644
 --- a/libfprint/fp-image-device.c
 +++ b/libfprint/fp-image-device.c
 @@ -98,6 +98,7 @@ static void
@@ -683,7 +683,7 @@ index ac88ffd..06794e8 100644
  
    priv->enroll_stage = 0;
 diff --git a/libfprint/fpi-image-device.c b/libfprint/fpi-image-device.c
-index 87bdc60..9fcd0dc 100644
+index 87bdc600..9fcd0dc3 100644
 --- a/libfprint/fpi-image-device.c
 +++ b/libfprint/fpi-image-device.c
 @@ -239,77 +239,48 @@ fp_image_device_maybe_complete_action (FpImageDevice *self, GError *error)
@@ -919,7 +919,7 @@ index 87bdc60..9fcd0dc 100644
  
  /**
 diff --git a/libfprint/fpi-image-device.h b/libfprint/fpi-image-device.h
-index 71472db..db00cae 100644
+index 71472dbb..db00caed 100644
 --- a/libfprint/fpi-image-device.h
 +++ b/libfprint/fpi-image-device.h
 @@ -114,6 +114,21 @@ struct _FpImageDeviceClass
@@ -945,7 +945,7 @@ index 71472db..db00cae 100644
  
  void fpi_image_device_set_bz3_threshold (FpImageDevice *self,
 diff --git a/libfprint/meson.build b/libfprint/meson.build
-index 4c262da..e60c5e2 100644
+index 4c262da3..e60c5e25 100644
 --- a/libfprint/meson.build
 +++ b/libfprint/meson.build
 @@ -130,7 +130,10 @@ driver_sources = {
@@ -969,7 +969,7 @@ index 4c262da..e60c5e2 100644
      'udev': files(),
      'virtual': files('drivers/virtual-device-listener.c'),
 diff --git a/meson.build b/meson.build
-index 34ae0b5..5fb6f74 100644
+index 34ae0b58..5fb6f745 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -5,6 +5,7 @@ project('libfprint', [ 'c', 'cpp' ],

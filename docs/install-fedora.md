@@ -39,7 +39,7 @@ sudo dnf install -y meson ninja-build gcc gcc-c++ pkg-config \
 
 ```
 git clone --branch fedora-support https://github.com/rhys-saldanha/libfprint-syna0082.git
-# apply patches/0001-0007 to a fresh checkout of libfprint at
+# apply patches/0001-0008 to a fresh checkout of libfprint at
 # patches/UPSTREAM_COMMIT, then:
 meson setup build -Ddoc=false -Dudev_rules=disabled
 ninja -C build
@@ -135,11 +135,8 @@ own default ~30 second idle auto-exit). The **first** attempt to activate
 the device after such a gap reliably fails with `device was disconnected`
 (visible as `usb <bus>-<port>: USB disconnect` immediately followed by a
 fresh re-enumeration in `dmesg`) as the sensor wakes and re-enumerates.
-Retrying immediately succeeds, since the device is now awake. The upstream
-Windows driver evidently handles this wake cycle transparently; this
-experimental Linux driver does not yet retry through it. Keeping `fprintd`
-running continuously (`fprintd -t` / disabling its idle exit) avoids
-triggering the cycle repeatedly during a session.
+This experimental driver retries that first activation once on the idle-wake
+disconnect (patch 0006) and then proceeds normally.
 
 ## 8. Validate
 
@@ -150,6 +147,6 @@ fprintd-verify -f right-index-finger      # touch a different finger -> verify-n
 ```
 
 All three passed against a real `06cb:0082` unit on Fedora 44 with this
-patch series (0001-0007) applied. Not yet enabled for PAM/screen unlock,
+patch series (0001-0008) applied. Not yet enabled for PAM/screen unlock,
 consistent with the project's general threshold-tuning caveat in
 [matcher.md](matcher.md).

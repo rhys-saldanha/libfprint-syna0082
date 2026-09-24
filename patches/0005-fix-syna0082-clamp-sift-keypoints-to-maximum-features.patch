@@ -1,7 +1,7 @@
 From 0e7802dadd8627d265e4badc1215df8c91b784cd Mon Sep 17 00:00:00 2001
 From: Rhys Saldanha <rhys@local>
 Date: Thu, 24 Sep 2026 20:20:36 +0100
-Subject: [PATCH] fix(syna0082): clamp SIFT keypoints to maximum_features
+Subject: [PATCH 5/8] fix(syna0082): clamp SIFT keypoints to maximum_features
 
 OpenCV's SIFT nfeatures cap is not always strictly enforced; ties at
 the response cutoff can yield nfeatures+1 keypoints. This produced a
