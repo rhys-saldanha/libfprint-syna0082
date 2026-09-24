@@ -1,0 +1,47 @@
+From 0e7802dadd8627d265e4badc1215df8c91b784cd Mon Sep 17 00:00:00 2001
+From: Rhys Saldanha <rhys@local>
+Date: Thu, 24 Sep 2026 20:20:36 +0100
+Subject: [PATCH] fix(syna0082): clamp SIFT keypoints to maximum_features
+
+OpenCV's SIFT nfeatures cap is not always strictly enforced; ties at
+the response cutoff can yield nfeatures+1 keypoints. This produced a
+701-feature encoded reference against a hard maximum_features=700
+bound enforced by decode_features(), causing every subsequent
+verification to fail with 'Feature count is invalid (count=701)'
+after a real 6-stage hardware enrollment.
+
+Truncate keypoints/descriptors defensively right after extraction so
+encoded references never exceed the bound the decoder already
+enforces.
+
+Verified against Synaptics/PQI 06cb:0082 real hardware on Fedora 44:
+fprintd-enroll completes all 6 stages, fprintd-verify reports
+verify-match for the enrolled finger and verify-no-match for a
+different finger.
+---
+ libfprint/drivers/syna0082-matcher.cpp | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/libfprint/drivers/syna0082-matcher.cpp b/libfprint/drivers/syna0082-matcher.cpp
+index 6fd52a6d..a52a6f23 100644
+--- a/libfprint/drivers/syna0082-matcher.cpp
++++ b/libfprint/drivers/syna0082-matcher.cpp
+@@ -221,6 +221,15 @@ syna0082_matcher_extract (const guint8 *pixels,
+                         keypoints,
+                         descriptors);
+ 
++  /* OpenCV's SIFT nfeatures cap is not always strictly enforced (ties at the
++   * response cutoff can yield nfeatures+1); truncate defensively so encoded
++   * references never violate decode_features()'s maximum_features bound. */
++  if (keypoints.size () > maximum_features)
++    {
++      keypoints.resize (maximum_features);
++      descriptors = descriptors.rowRange (0, maximum_features);
++    }
++
+   if (keypoints.size () < minimum_features || descriptors.empty ())
+     {
+       g_set_error_literal (error,
+-- 
+2.55.0
+
