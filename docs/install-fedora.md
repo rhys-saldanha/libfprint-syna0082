@@ -39,7 +39,7 @@ sudo dnf install -y meson ninja-build gcc gcc-c++ pkg-config \
 
 ```
 git clone --branch fedora-support https://github.com/rhys-saldanha/libfprint-syna0082.git
-# apply patches/0001-0005 to a fresh checkout of libfprint at
+# apply patches/0001-0007 to a fresh checkout of libfprint at
 # patches/UPSTREAM_COMMIT, then:
 meson setup build -Ddoc=false -Dudev_rules=disabled
 ninja -C build
@@ -150,6 +150,6 @@ fprintd-verify -f right-index-finger      # touch a different finger -> verify-n
 ```
 
 All three passed against a real `06cb:0082` unit on Fedora 44 with this
-patch series (0001-0005) applied. Not yet enabled for PAM/screen unlock,
+patch series (0001-0007) applied. Not yet enabled for PAM/screen unlock,
 consistent with the project's general threshold-tuning caveat in
 [matcher.md](matcher.md).

@@ -1,0 +1,62 @@
+From eaa71d181e20eef58f611d4e3af2a687fb5c5122 Mon Sep 17 00:00:00 2001
+From: Rhys Saldanha <18572231+rhys-saldanha@users.noreply.github.com>
+Date: Thu, 24 Sep 2026 21:50:45 +0100
+Subject: [PATCH 2/2] fix(syna0082): drop stale interrupt errors after session
+ end
+
+The interrupt poll armed during a session stays in flight until release.
+Sessions that finish normally deactivate, then close; the sensor powers
+down immediately on release and answers the outstanding poll with a
+disconnect (G_USB_DEVICE_ERROR_NO_DEVICE). Reporting that as a session
+error after the framework went inactive triggers
+fpi_image_device_activate_complete() mid-close and an assertion.
+
+Track whether an activation is running and drop interrupt-caused errors
+once the session is over, instead of surfacing them to the framework.
+---
+ libfprint/drivers/syna0082.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/libfprint/drivers/syna0082.c b/libfprint/drivers/syna0082.c
+index fb140bbb..234d94eb 100644
+--- a/libfprint/drivers/syna0082.c
++++ b/libfprint/drivers/syna0082.c
+@@ -39,6 +39,7 @@ struct _FpiDeviceSyna0082
+   gsize          rearm_stage;
+   guint          capture_count;
+   gboolean       deactivating;
++  gboolean       session_active;
+   gboolean       awaiting_release;
+   gboolean       wake_retry_used;
+ };
+@@ -122,6 +123,7 @@ complete_deactivation (FpiDeviceSyna0082 *self)
+   if (!self->deactivating)
+     return;
+   self->deactivating = FALSE;
++  self->session_active = FALSE;
+   fpi_image_device_deactivate_complete (FP_IMAGE_DEVICE (self), NULL);
+ }
+ 
+@@ -134,8 +136,10 @@ fail_session_or_deactivate (FpiDeviceSyna0082 *self,
+       g_clear_error (&error);
+       complete_deactivation (self);
+     }
+-  else
++  else if (self->session_active)
+     fpi_image_device_session_error (FP_IMAGE_DEVICE (self), error);
++  else
++    g_clear_error (&error);
+ }
+ 
+ static void
+@@ -516,6 +520,7 @@ dev_activate (FpImageDevice *image_device)
+   FpiDeviceSyna0082 *self = FPI_DEVICE_SYNA0082 (image_device);
+ 
+   self->deactivating = FALSE;
++  self->session_active = TRUE;
+   self->init_stage = 0;
+   self->capture_count = 0;
+   self->awaiting_release = FALSE;
+-- 
+2.55.0
+

@@ -39,7 +39,9 @@ struct _FpiDeviceSyna0082
   gsize          rearm_stage;
   guint          capture_count;
   gboolean       deactivating;
+  gboolean       session_active;
   gboolean       awaiting_release;
+  gboolean       wake_retry_used;
 };
 
 G_DECLARE_FINAL_TYPE (FpiDeviceSyna0082, fpi_device_syna0082,
@@ -121,6 +123,7 @@ complete_deactivation (FpiDeviceSyna0082 *self)
   if (!self->deactivating)
     return;
   self->deactivating = FALSE;
+  self->session_active = FALSE;
   fpi_image_device_deactivate_complete (FP_IMAGE_DEVICE (self), NULL);
 }
 
@@ -133,8 +136,10 @@ fail_session_or_deactivate (FpiDeviceSyna0082 *self,
       g_clear_error (&error);
       complete_deactivation (self);
     }
-  else
+  else if (self->session_active)
     fpi_image_device_session_error (FP_IMAGE_DEVICE (self), error);
+  else
+    g_clear_error (&error);
 }
 
 static void
@@ -266,9 +271,13 @@ interrupt_cb (FpiUsbTransfer *transfer,
           fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), FALSE);
           return;
         }
+      fp_dbg ("interrupt error: %s", error->message);
       fail_session_or_deactivate (self, error);
       return;
     }
+  fp_dbg ("interrupt event: %02x %02x %02x %02x %02x (len %" G_GSIZE_FORMAT ")",
+          transfer->buffer[0], transfer->buffer[1], transfer->buffer[2],
+          transfer->buffer[3], transfer->buffer[4], transfer->actual_length);
   if (transfer->actual_length == 5 && transfer->buffer[0] == 0x03 &&
       (transfer->buffer[1] == 0x42 || transfer->buffer[1] == 0x43) &&
       transfer->buffer[2] == 0x04)
@@ -309,6 +318,34 @@ start_interrupt (FpiDeviceSyna0082 *self)
 
 static void init_send_stage (FpiDeviceSyna0082 *self);
 
+/* The sensor powers down its imaging hardware when idle and wakes on the
+ * first vendor command after that, which the physical device answers by
+ * dropping off the bus and re-enumerating as a genuine new USB device.
+ * The framework re-probes automatically within about a second. Absorb that
+ * one-time wake cycle: on the first such disconnect during an activation,
+ * wait for the reconnect to settle and restart the activation once. */
+#define WAKE_RETRY_DELAY_SECONDS 2
+
+static gboolean
+wake_retry_timeout_cb (gpointer user_data);
+
+static gboolean
+wake_retry_or_fail (FpiDeviceSyna0082 *self, GError **error)
+{
+  if (self->wake_retry_used ||
+      !g_error_matches (*error,
+                        G_USB_DEVICE_ERROR,
+                        G_USB_DEVICE_ERROR_NO_DEVICE))
+    return FALSE;
+
+  self->wake_retry_used = TRUE;
+  g_clear_error (error);
+  g_timeout_add_seconds (WAKE_RETRY_DELAY_SECONDS,
+                         wake_retry_timeout_cb,
+                         self);
+  return TRUE;
+}
+
 static void
 init_read_cb (FpiUsbTransfer *transfer,
               FpDevice       *device,
@@ -319,7 +356,8 @@ init_read_cb (FpiUsbTransfer *transfer,
 
   if (error)
     {
-      fpi_image_device_activate_complete (FP_IMAGE_DEVICE (self), error);
+      if (!wake_retry_or_fail (self, &error))
+        fpi_image_device_activate_complete (FP_IMAGE_DEVICE (self), error);
       return;
     }
   self->init_stage++;
@@ -345,7 +383,8 @@ init_write_cb (FpiUsbTransfer *transfer,
 
   if (error)
     {
-      fpi_image_device_activate_complete (FP_IMAGE_DEVICE (self), error);
+      if (!wake_retry_or_fail (self, &error))
+        fpi_image_device_activate_complete (FP_IMAGE_DEVICE (self), error);
       return;
     }
 
@@ -411,6 +450,21 @@ init_send_stage (FpiDeviceSyna0082 *self)
                            NULL);
 }
 
+static void submit_operation_control (FpiDeviceSyna0082 *self);
+
+static gboolean
+wake_retry_timeout_cb (gpointer user_data)
+{
+  FpiDeviceSyna0082 *self = FPI_DEVICE_SYNA0082 (user_data);
+
+  if (!self->deactivating)
+    {
+      self->init_stage = 0;
+      submit_operation_control (self);
+    }
+  return G_SOURCE_REMOVE;
+}
+
 static void
 operation_control_cb (FpiUsbTransfer *transfer,
                       FpDevice       *device,
@@ -421,7 +475,8 @@ operation_control_cb (FpiUsbTransfer *transfer,
 
   if (error)
     {
-      fpi_image_device_activate_complete (FP_IMAGE_DEVICE (self), error);
+      if (!wake_retry_or_fail (self, &error))
+        fpi_image_device_activate_complete (FP_IMAGE_DEVICE (self), error);
       return;
     }
   if (transfer->actual_length != 2 || transfer->buffer[0] != 0 ||
@@ -438,15 +493,10 @@ operation_control_cb (FpiUsbTransfer *transfer,
 }
 
 static void
-dev_activate (FpImageDevice *image_device)
+submit_operation_control (FpiDeviceSyna0082 *self)
 {
-  FpiDeviceSyna0082 *self = FPI_DEVICE_SYNA0082 (image_device);
   FpiUsbTransfer *transfer;
 
-  self->deactivating = FALSE;
-  self->init_stage = 0;
-  self->capture_count = 0;
-  self->awaiting_release = FALSE;
   transfer = fpi_usb_transfer_new (FP_DEVICE (self));
   fpi_usb_transfer_fill_control (transfer,
                                  G_USB_DEVICE_DIRECTION_DEVICE_TO_HOST,
@@ -462,6 +512,20 @@ dev_activate (FpImageDevice *image_device)
                            fpi_device_get_cancellable (FP_DEVICE (self)),
                            operation_control_cb,
                            NULL);
+}
+
+static void
+dev_activate (FpImageDevice *image_device)
+{
+  FpiDeviceSyna0082 *self = FPI_DEVICE_SYNA0082 (image_device);
+
+  self->deactivating = FALSE;
+  self->session_active = TRUE;
+  self->init_stage = 0;
+  self->capture_count = 0;
+  self->awaiting_release = FALSE;
+  self->wake_retry_used = FALSE;
+  submit_operation_control (self);
 }
 
 static void rearm_send_stage (FpiDeviceSyna0082 *self);
