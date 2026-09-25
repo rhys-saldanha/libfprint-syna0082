@@ -39,7 +39,7 @@ sudo dnf install -y meson ninja-build gcc gcc-c++ pkg-config \
 
 ```
 git clone --branch fedora-support https://github.com/rhys-saldanha/libfprint-syna0082.git
-# apply patches/0001-0008 to a fresh checkout of libfprint at
+# apply patches/0001-0009 to a fresh checkout of libfprint at
 # patches/UPSTREAM_COMMIT, then:
 meson setup build -Ddoc=false -Dudev_rules=disabled
 ninja -C build
@@ -127,7 +127,7 @@ echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="06cb", ATTR{idProduct}=="0082", MODE="0
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-## 7. Known hardware quirk: one-time wake disconnect
+## 7. Known hardware quirks
 
 The physical sensor appears to enter a low-power/idle USB state whenever no
 host has actively talked to it for a while (matching `fprintd.service`'s
@@ -138,6 +138,22 @@ fresh re-enumeration in `dmesg`) as the sensor wakes and re-enumerates.
 This experimental driver retries that first activation once on the idle-wake
 disconnect (patch 0006) and then proceeds normally.
 
+Separately, the sensor only answers the init handshake in full once it has
+seen a USB port reset; without one it silently acks the final init write
+with a 2-byte stub instead of the expected scan configuration, and
+activation fails with a short-read error every time (not just after an
+idle gap - this reproduces on the very first activation since power-up).
+The driver resets the device at the start of every `open` to cover this
+(patch 0009), matching the same pattern `vfs7552.c` uses for a related
+Validity-family device.
+
+Neither quirk is currently handled if it happens **mid-enrollment**, i.e.
+between two of the several finger touches a single enrollment requires: the
+driver's wait for the next touch has no timeout, so a long pause between
+touches can hang the operation rather than erroring or retrying. Keep
+enrollment touches close together (a few seconds apart) until this is
+addressed.
+
 ## 8. Validate
 
 ```
@@ -147,6 +163,6 @@ fprintd-verify -f right-index-finger      # touch a different finger -> verify-n
 ```
 
 All three passed against a real `06cb:0082` unit on Fedora 44 with this
-patch series (0001-0008) applied. Not yet enabled for PAM/screen unlock,
+patch series (0001-0009) applied. Not yet enabled for PAM/screen unlock,
 consistent with the project's general threshold-tuning caveat in
 [matcher.md](matcher.md).

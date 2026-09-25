@@ -1,7 +1,7 @@
 From bc810358a8c271769a9dac352fa031922ef7b3f5 Mon Sep 17 00:00:00 2001
 From: Alperen Elhan <alperen@elhan.org>
 Date: Tue, 4 Aug 2026 20:14:27 +0300
-Subject: [PATCH 2/8] feat(syna0082): add independent small-area matcher
+Subject: [PATCH 2/9] feat(syna0082): add independent small-area matcher
 
 ---
  libfprint/drivers/syna0082-matcher.cpp | 303 +++++++++++++++++++++++++

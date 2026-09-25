@@ -1,7 +1,7 @@
 From 31e6b2df6dd9cb387abc151c59403ea69c57a490 Mon Sep 17 00:00:00 2001
 From: Alperen Elhan <alperen@elhan.org>
 Date: Tue, 4 Aug 2026 23:23:27 +0300
-Subject: [PATCH 4/8] fix(syna0082): diagnose invalid feature data
+Subject: [PATCH 4/9] fix(syna0082): diagnose invalid feature data
 
 ---
  libfprint/drivers/syna0082-matcher.cpp | 86 ++++++++++++++++++++------

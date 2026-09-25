@@ -1,7 +1,7 @@
 From 67f69e67820b17a2cb90cabdfe135fda0d00e767 Mon Sep 17 00:00:00 2001
 From: Rhys Saldanha <18572231+rhys-saldanha@users.noreply.github.com>
 Date: Thu, 24 Sep 2026 21:50:30 +0100
-Subject: [PATCH 6/8] fix(syna0082): retry activation once on idle wake
+Subject: [PATCH 6/9] fix(syna0082): retry activation once on idle wake
  disconnect
 
 The sensor powers down its imaging hardware when idle and wakes on the

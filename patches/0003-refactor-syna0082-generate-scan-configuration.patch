@@ -1,7 +1,7 @@
 From e72c11f93ad3a9240c4418b2cef581e43139000a Mon Sep 17 00:00:00 2001
 From: Alperen Elhan <alperen@elhan.org>
 Date: Tue, 4 Aug 2026 20:52:03 +0300
-Subject: [PATCH 3/8] refactor(syna0082): generate scan configuration
+Subject: [PATCH 3/9] refactor(syna0082): generate scan configuration
 
 ---
  libfprint/drivers/syna0082.c | 30 ++++++++++++++++++++++++------

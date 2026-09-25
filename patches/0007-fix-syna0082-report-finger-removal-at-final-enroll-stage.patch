@@ -1,7 +1,7 @@
 From 8f5dd0b27953c61a62963bb16322876865e9d095 Mon Sep 17 00:00:00 2001
 From: Rhys Saldanha <18572231+rhys-saldanha@users.noreply.github.com>
 Date: Thu, 24 Sep 2026 23:06:45 +0100
-Subject: [PATCH 7/8] fix(syna0082): report finger removal at the end of the
+Subject: [PATCH 7/9] fix(syna0082): report finger removal at the end of the
  final enroll stage
 
 image_captured() processes the final print synchronously and the framework

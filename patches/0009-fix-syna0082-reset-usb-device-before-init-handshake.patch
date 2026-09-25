@@ -1,0 +1,41 @@
+From 6736bf206045c7346a94b4434f0ad8946c9b067d Mon Sep 17 00:00:00 2001
+From: Rhys Saldanha <18572231+rhys-saldanha@users.noreply.github.com>
+Date: Fri, 25 Sep 2026 18:08:00 +0100
+Subject: [PATCH 9/9] fix(syna0082): reset USB device before the init handshake
+
+Without a prior port reset the sensor acks the final init write
+(scan-matrix upload) with a 2-byte stub instead of returning the
+expected 2154-byte scan configuration, and activation fails with a
+short-read error on every first use since power-up. Confirmed on
+real 06cb:0082 hardware (Fedora 44): reset-before-open makes
+identify/enroll succeed with no other change.
+
+vfs7552.c (another Validity-family driver) already does exactly
+this in its dev_open for the same reason.
+---
+ libfprint/drivers/syna0082.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/libfprint/drivers/syna0082.c b/libfprint/drivers/syna0082.c
+index aacb0e5e..8b828ddd 100644
+--- a/libfprint/drivers/syna0082.c
++++ b/libfprint/drivers/syna0082.c
+@@ -644,6 +644,15 @@ dev_open (FpImageDevice *image_device)
+   if (directory == NULL || *directory == '\0')
+     directory = "/var/lib/libfprint/syna0082";
+ 
++  /* The sensor only answers the init handshake in full once it has seen a
++   * USB port reset; without this it silently acks the final init write
++   * with a 2-byte stub instead of the expected scan configuration. */
++  if (!g_usb_device_reset (fpi_device_get_usb_device (device), &error))
++    {
++      fpi_image_device_open_complete (image_device, error);
++      return;
++    }
++
+   build_scan_config_v1 (self->config_39);
+   if (!load_blob (directory, "config-06.bin", CONFIG_06_LENGTH, 0x06,
+                   &self->config_06, &error) ||
+-- 
+2.55.0
+

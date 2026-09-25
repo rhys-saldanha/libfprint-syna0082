@@ -1,7 +1,7 @@
 From 41ab5539b49b8143ae868b32325b24ab6c08b370 Mon Sep 17 00:00:00 2001
 From: Alperen Elhan <alperen@elhan.org>
 Date: Tue, 4 Aug 2026 18:20:37 +0300
-Subject: [PATCH 1/8] feat(driver): add experimental Synaptics 06cb:0082
+Subject: [PATCH 1/9] feat(driver): add experimental Synaptics 06cb:0082
  support
 
 ---

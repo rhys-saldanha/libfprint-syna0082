@@ -1,7 +1,7 @@
 From 97b0f0ecd55906d6a054ec82191a9bf11370316b Mon Sep 17 00:00:00 2001
 From: Rhys Saldanha <18572231+rhys-saldanha@users.noreply.github.com>
 Date: Thu, 24 Sep 2026 23:07:09 +0100
-Subject: [PATCH 8/8] test(syna0082): add umockdev regression for
+Subject: [PATCH 8/9] test(syna0082): add umockdev regression for
  enroll/verify/identify
 
 ---
